@@ -1,5 +1,5 @@
-import { CalendarView } from '@/components/calendar/CalendarView'
-import { DailyForecast } from '@/components/calendar/DailyForecast'
+import { CalendarView } from '../../components/calendar/CalendarView'
+import { DailyForecast } from '../../components/calendar/DailyForecast'
 
 export default function CalendarPage() {
   return (

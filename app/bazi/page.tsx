@@ -1,4 +1,4 @@
-import { BaziForm } from '@/components/bazi/BaziForm'
+import { BaziForm } from '../../components/bazi/BaziForm'
 
 export default function BaziPage() {
   return (
