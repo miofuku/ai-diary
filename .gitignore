@@ -1,7 +1,58 @@
+# Dependencies
 node_modules/
-.next/
+venv/
+*.pyc
+
+# Environment
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Build
+dist/
+build/
+coverage/
+
+# Database
+*.sqlite
+*.db
+
+# AI Model
+models/
+*.weights
+*.h5
+
+# Temp files
+.DS_Store
+Thumbs.db
+
+# Security
+*.pem
+*.key
+*.cert
+
+# Config
+config.json
+settings.json
+!example.config.json
+!default.settings.json
+
+# Documents
+documents/
+*.md
+*.txt
+*.pdf
+*.docx
+*.doc
+.cursor/
