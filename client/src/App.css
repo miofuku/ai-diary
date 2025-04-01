@@ -211,3 +211,90 @@ button:hover {
   background: #ffff76;
   color: #333;
 }
+
+/* Add to App.css for recording visuals */
+.recording-indicator {
+  background-color: rgba(255, 51, 51, 0.1);
+  border: 1px solid rgba(255, 51, 51, 0.3);
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.recording-pulse {
+  width: 12px;
+  height: 12px;
+  background-color: #ff3333;
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(255, 51, 51, 0.7);
+  }
+  
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 10px rgba(255, 51, 51, 0);
+  }
+  
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(255, 51, 51, 0);
+  }
+}
+
+.interim-text {
+  font-style: italic;
+  color: #666;
+  margin-left: 10px;
+  flex-grow: 1;
+  text-align: left;
+  min-height: 20px;
+  width: 100%;
+  margin-top: 5px;
+}
+
+.recording-active {
+  background-color: #ff3333 !important;
+}
+
+/* Styling for the language button */
+button.language-toggle {
+  background-color: #6c757d;
+}
+
+button.language-toggle:hover {
+  background-color: #5a6268;
+}
+
+/* Add styles for language detection */
+.detected-language {
+  background-color: rgba(0, 123, 255, 0.1);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.language-auto {
+  background-color: #28a745 !important;
+}
+
+.language-auto:hover {
+  background-color: #218838 !important;
+}
+
+.auto-detect-toggle {
+  background-color: #6c757d;
+}
+
+.auto-detect-toggle:hover {
+  background-color: #5a6268;
+}

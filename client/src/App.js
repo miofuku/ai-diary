@@ -9,6 +9,10 @@ function App() {
   const [recognition, setRecognition] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [filteredEntries, setFilteredEntries] = useState([]);
+  const [interimTranscript, setInterimTranscript] = useState('');
+  const [language, setLanguage] = useState('zh-CN');
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [recordingTimer, setRecordingTimer] = useState(null);
 
   const fetchEntries = async () => {
     try {
@@ -20,7 +24,6 @@ function App() {
     }
   };
 
-  // Define filterEntriesByDate BEFORE using it in useEffect
   const filterEntriesByDate = useCallback((date) => {
     const filtered = entries.filter(entry => {
       const entryDate = new Date(entry.createdAt);
@@ -33,29 +36,68 @@ function App() {
     setFilteredEntries(filtered);
   }, [entries]);
 
-  useEffect(() => {
-    // Initialize speech recognition
-    if (window.webkitSpeechRecognition) {
-      const recognition = new window.webkitSpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'zh-CN';
+  // Create recognition instance
+  const createRecognitionInstance = (lang) => {
+    if (!window.webkitSpeechRecognition) return null;
+    
+    const instance = new window.webkitSpeechRecognition();
+    instance.continuous = true;
+    instance.interimResults = true;
+    instance.lang = lang;
+    
+    return instance;
+  };
 
-      recognition.onresult = (event) => {
-        const transcript = Array.from(event.results)
-          .map(result => result[0].transcript)
-          .join('');
-        setContent(transcript);
+  useEffect(() => {
+    const recognitionInstance = createRecognitionInstance(language);
+    
+    if (recognitionInstance) {
+      recognitionInstance.onresult = (event) => {
+        let interimText = '';
+        let finalText = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalText += transcript + ' ';
+          } else {
+            interimText += transcript;
+          }
+        }
+
+        setInterimTranscript(interimText);
+        if (finalText) {
+          setContent(prevContent => prevContent + finalText);
+        }
       };
 
-      setRecognition(recognition);
+      recognitionInstance.onerror = (event) => {
+        console.error('Speech recognition error', event.error);
+        if (event.error === 'no-speech') {
+          if (isRecording) {
+            recognitionInstance.stop();
+            setTimeout(() => {
+              if (isRecording) recognitionInstance.start();
+            }, 100);
+          }
+        }
+      };
+
+      setRecognition(recognitionInstance);
     }
 
-    // Get existing diaries
+    return () => {
+      if (recognitionInstance) {
+        recognitionInstance.stop();
+      }
+    };
+  }, [language, isRecording]);
+
+  useEffect(() => {
+    // Initialize data fetch
     fetchEntries();
   }, []);
 
-  // Filter entries when selected date or entries change
   useEffect(() => {
     filterEntriesByDate(selectedDate);
   }, [selectedDate, entries, filterEntriesByDate]);
@@ -95,10 +137,41 @@ function App() {
 
     if (isRecording) {
       recognition.stop();
+      clearInterval(recordingTimer);
+      setRecordingTimer(null);
+      setInterimTranscript('');
     } else {
       recognition.start();
+      setRecordingTime(0);
+      const timer = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      setRecordingTimer(timer);
     }
     setIsRecording(!isRecording);
+  };
+
+  const switchLanguage = () => {
+    const newLanguage = language === 'zh-CN' ? 'en-US' : 'zh-CN';
+    setLanguage(newLanguage);
+    
+    // Restart recognition if it's running
+    if (isRecording && recognition) {
+      recognition.stop();
+      setTimeout(() => {
+        const newInstance = createRecognitionInstance(newLanguage);
+        if (newInstance) {
+          setRecognition(newInstance);
+          newInstance.start();
+        }
+      }, 100);
+    }
+  };
+
+  const formatRecordingTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -124,10 +197,32 @@ function App() {
               onChange={(e) => setContent(e.target.value)}
               placeholder={`Write your diary for ${selectedDate.toLocaleDateString()}...`}
             />
+            
+            {isRecording && (
+              <div className="recording-indicator">
+                <div className="recording-pulse"></div>
+                <span>Recording... {formatRecordingTime(recordingTime)}</span>
+                <div className="interim-text">{interimTranscript}</div>
+              </div>
+            )}
+            
             <div className="button-group">
-              <button type="button" onClick={toggleRecording}>
+              <button 
+                type="button" 
+                onClick={toggleRecording} 
+                className={isRecording ? "recording-active" : ""}
+              >
                 {isRecording ? 'Stop recording' : 'Start recording'}
               </button>
+              
+              <button 
+                type="button" 
+                onClick={switchLanguage}
+                className="language-toggle"
+              >
+                {language === 'zh-CN' ? '中文' : 'English'}
+              </button>
+              
               <button type="submit">Save</button>
             </div>
           </form>
