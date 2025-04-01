@@ -298,3 +298,129 @@ button.language-toggle:hover {
 .auto-detect-toggle:hover {
   background-color: #5a6268;
 }
+
+/* Add styles for the editing interface */
+.edit-form {
+  margin-bottom: 20px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 15px;
+  background-color: #f9f9f9;
+}
+
+.edit-form h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #333;
+}
+
+.markdown-toolbar {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 10px;
+}
+
+.markdown-toolbar button {
+  padding: 5px 10px;
+  font-size: 14px;
+  background-color: #f0f0f0;
+  color: #333;
+  border: 1px solid #ccc;
+}
+
+.markdown-toolbar button:hover {
+  background-color: #e0e0e0;
+}
+
+.edit-container {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 15px;
+}
+
+.edit-pane, .preview-pane {
+  flex: 1;
+}
+
+.edit-pane textarea {
+  height: 200px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  resize: vertical;
+  font-family: monospace;
+}
+
+.markdown-preview {
+  height: 200px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+  overflow-y: auto;
+  text-align: left;
+}
+
+.markdown-preview h1, 
+.markdown-preview h2, 
+.markdown-preview h3 {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.markdown-preview ul {
+  padding-left: 20px;
+}
+
+.cancel-button {
+  background-color: #6c757d;
+}
+
+.cancel-button:hover {
+  background-color: #5a6268;
+}
+
+.edit-button {
+  background-color: #6c757d;
+  padding: 5px 10px;
+  font-size: 12px;
+  margin-left: 10px;
+}
+
+.entry {
+  position: relative;
+}
+
+.entry button.edit-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  opacity: 0.6;
+}
+
+.entry button.edit-button:hover {
+  opacity: 1;
+}
+
+/* Make the content inside entries support markdown */
+.entry p, .entry ul, .entry ol {
+  margin-bottom: 0.8em;
+  text-align: left;
+}
+
+.entry h2 {
+  font-size: 1.5em;
+  margin: 15px 0 10px;
+  text-align: left;
+}
+
+.entry em {
+  font-style: italic;
+}
+
+.entry strong {
+  font-weight: bold;
+}

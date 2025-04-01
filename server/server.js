@@ -29,11 +29,11 @@ async function ensureDataFile() {
 async function optimizeText(text) {
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: "You are a text optimization assistant, responsible for整理日记内容成优雅的格式，保持原意的同时提升表达。"
+          content: "You are a text optimization assistant, responsible for optimizing the diary content to be more elegant, while keeping the original meaning and improving the expression."
         },
         {
           role: "user",
@@ -105,6 +105,32 @@ app.get('/api/entries/:date', async (req, res) => {
     });
     
     res.json(filteredEntries);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update entry
+app.put('/api/entries/:id', async (req, res) => {
+  try {
+    await ensureDataFile();
+    const { content } = req.body;
+    const entryId = parseInt(req.params.id);
+    
+    // Optimize text
+    const optimizedContent = await optimizeText(content);
+    
+    const entries = JSON.parse(await fs.readFile(dataPath, 'utf8'));
+    const entryIndex = entries.findIndex(entry => entry.id === entryId);
+    
+    if (entryIndex === -1) {
+      return res.status(404).json({ error: 'Entry not found' });
+    }
+    
+    entries[entryIndex].content = optimizedContent;
+    await fs.writeFile(dataPath, JSON.stringify(entries, null, 2));
+    
+    res.json(entries[entryIndex]);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
