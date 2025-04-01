@@ -52,16 +52,19 @@ async function optimizeText(text) {
 app.post('/api/entries', async (req, res) => {
   try {
     await ensureDataFile();
-    const { content, type } = req.body;
+    const { content, type, targetDate } = req.body;
     
     // Optimize text
     const optimizedContent = await optimizeText(content);
+    
+    // Use the provided targetDate or current date
+    const createdAt = targetDate || new Date().toISOString();
     
     const entry = {
       id: Date.now(),
       content: optimizedContent,
       type, // 'text' or 'voice'
-      createdAt: new Date().toISOString()
+      createdAt
     };
 
     const entries = JSON.parse(await fs.readFile(dataPath, 'utf8'));
@@ -80,6 +83,28 @@ app.get('/api/entries', async (req, res) => {
     await ensureDataFile();
     const entries = JSON.parse(await fs.readFile(dataPath, 'utf8'));
     res.json(entries);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get entries by date
+app.get('/api/entries/:date', async (req, res) => {
+  try {
+    await ensureDataFile();
+    const targetDate = new Date(req.params.date);
+    const entries = JSON.parse(await fs.readFile(dataPath, 'utf8'));
+    
+    const filteredEntries = entries.filter(entry => {
+      const entryDate = new Date(entry.createdAt);
+      return (
+        entryDate.getDate() === targetDate.getDate() &&
+        entryDate.getMonth() === targetDate.getMonth() &&
+        entryDate.getFullYear() === targetDate.getFullYear()
+      );
+    });
+    
+    res.json(filteredEntries);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
