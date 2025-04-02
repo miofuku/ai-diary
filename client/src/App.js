@@ -15,6 +15,8 @@ function App() {
   const [recordingTimer, setRecordingTimer] = useState(null);
   const [editingEntryId, setEditingEntryId] = useState(null);
   const [editContent, setEditContent] = useState('');
+  const [audioRecorder, setAudioRecorder] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const fetchEntries = async () => {
     try {
@@ -116,6 +118,69 @@ function App() {
     };
   }, [language, createRecognitionInstance]);
 
+  // Create audio recorder during initialization
+  useEffect(() => {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      // We'll use MediaRecorder API to capture high-quality audio
+      let chunks = [];
+      let mediaRecorder = null;
+
+      const setupRecorder = async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+          
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) {
+              chunks.push(e.data);
+            }
+          };
+          
+          mediaRecorder.onstop = async () => {
+            setIsProcessing(true);
+            const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+            chunks = [];
+            
+            // Send to local Whisper service
+            const formData = new FormData();
+            formData.append('audio', audioBlob);
+            formData.append('language', language === 'zh-CN' ? 'zh' : 'en');
+            
+            try {
+              const response = await fetch('http://localhost:3001/transcribe', {
+                method: 'POST',
+                body: formData
+              });
+              
+              if (response.ok) {
+                const result = await response.json();
+                setContent(prevContent => prevContent + result.text);
+              } else {
+                console.error('Transcription failed');
+              }
+            } catch (error) {
+              console.error('Error sending audio for transcription:', error);
+            } finally {
+              setIsProcessing(false);
+            }
+          };
+          
+          setAudioRecorder(mediaRecorder);
+        } catch (error) {
+          console.error('Error accessing microphone:', error);
+        }
+      };
+      
+      setupRecorder();
+      
+      return () => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+        }
+      };
+    }
+  }, [language]);
+
   useEffect(() => {
     // Initialize data fetch
     fetchEntries();
@@ -181,30 +246,25 @@ function App() {
     }
   };
 
-  // Handle the recording toggle
+  // Replace toggleRecording with this enhanced version
   const toggleRecording = () => {
-    if (!recognition) {
-      console.warn("No recognition instance available");
-      return;
-    }
-
     if (isRecording) {
-      recognition.stop();
+      // Stop recording
+      if (audioRecorder && audioRecorder.state !== 'inactive') {
+        audioRecorder.stop();
+      }
       clearInterval(recordingTimer);
       setRecordingTimer(null);
       setInterimTranscript('');
-      console.log("Recording stopped");
     } else {
-      try {
-        recognition.start();
+      // Start recording
+      if (audioRecorder) {
+        audioRecorder.start(1000); // Collect data every second
         setRecordingTime(0);
         const timer = setInterval(() => {
           setRecordingTime(prev => prev + 1);
         }, 1000);
         setRecordingTimer(timer);
-        console.log("Recording started");
-      } catch (error) {
-        console.error("Failed to start recording:", error);
       }
     }
     setIsRecording(!isRecording);

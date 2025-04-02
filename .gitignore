@@ -56,3 +56,6 @@ documents/
 *.docx
 *.doc
 .cursor/
+
+__pycache__
+venv/
