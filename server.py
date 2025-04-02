@@ -123,7 +123,7 @@ async def optimize_text(content: str) -> str:
         # If optimization fails, return the original content
         return content
 
-# Integrate diary content using LLM
+# Enhanced integrate_diary_content function with smart formatting
 async def integrate_diary_content(existing_content, new_content):
     try:
         response = openai.chat.completions.create(
@@ -131,17 +131,38 @@ async def integrate_diary_content(existing_content, new_content):
             messages=[
                 {
                     "role": "system",
-                    "content": """You are a diary integration assistant. Your task is to integrate new diary content with existing content. 
-                    If the new content is related to the existing content, integrate it seamlessly, enhancing the narrative and connecting the ideas.
-                    If the new content is about a different topic, start a new paragraph. 
-                    Enhance the writing style to be cohesive and engaging, while preserving the original meaning.
-                    Never add timestamps or date markers."""
+                    "content": """You are a diary integration assistant who specializes in seamless content placement and formatting.
+
+Your task:
+1. Analyze both the existing diary content and the new content to be added
+2. Find meaningful connections and semantic relationships between the content pieces
+3. Determine the OPTIMAL insertion point in the existing content where the new content fits best
+4. Insert the new content at this point, maintaining narrative flow
+5. Apply appropriate formatting to improve readability:
+   - Use bullet points for lists, tasks, ideas, or multiple distinct points
+   - Use numbered lists for sequential steps or prioritized items
+   - Use paragraphs for narrative content, reflections, or connected thoughts
+   - Add appropriate section headers (using markdown ##) if introducing new major topics
+6. Make minimal edits to create smooth transitions between paragraphs
+
+Guidelines:
+- If the new content relates closely to a specific section, integrate it there
+- If the new content continues a thought, append to that specific section
+- If the new content introduces a new topic, add a paragraph break
+- Preserve the writer's voice, style, and emotional tone
+- Use transitional phrases when needed for smooth connections
+- Never add timestamps or date markers
+- Format lists as bullet points when the content resembles a list or collection of items
+- Apply consistent indentation for hierarchical lists if needed
+- Use paragraph breaks for topic changes or to improve readability
+- Aim for a natural reading experience as if written in one session"""
                 },
                 {
                     "role": "user",
                     "content": f'Existing diary content: "{existing_content}"\nNew diary content to integrate: "{new_content}"'
                 }
-            ]
+            ],
+            temperature=0.3  # Lower temperature for more consistent results
         )
         return response.choices[0].message.content
     except Exception as e:
