@@ -20,23 +20,34 @@ function App() {
 
   const fetchEntries = async () => {
     try {
+      console.log('Fetching entries...');
       const response = await fetch('http://localhost:3001/api/entries');
+      
+      if (!response.ok) {
+        throw new Error(`Server responded with status: ${response.status}`);
+      }
+      
       const data = await response.json();
+      console.log('Entries fetched:', data.length);
       setEntries(data);
     } catch (error) {
-      console.error('Get diary failed:', error);
+      console.error('Failed to fetch entries:', error);
+      // Optionally show an error message to the user
     }
   };
 
   const filterEntriesByDate = useCallback((date) => {
+    console.log('Filtering entries for date:', date.toISOString().split('T')[0]);
     const filtered = entries.filter(entry => {
       const entryDate = new Date(entry.createdAt);
-      return (
+      const match = (
         entryDate.getDate() === date.getDate() &&
         entryDate.getMonth() === date.getMonth() &&
         entryDate.getFullYear() === date.getFullYear()
       );
+      return match;
     });
+    console.log('Filtered entries:', filtered.length);
     setFilteredEntries(filtered);
   }, [entries]);
 
@@ -116,70 +127,19 @@ function App() {
         }
       }
     };
-  }, [language, createRecognitionInstance]);
+  }, [language, createRecognitionInstance, isRecording, recognition]);
 
-  // Create audio recorder during initialization
+  // Replace the existing audio recorder useEffect with this lazy-loading approach
   useEffect(() => {
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      // We'll use MediaRecorder API to capture high-quality audio
-      let chunks = [];
-      let mediaRecorder = null;
-
-      const setupRecorder = async () => {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-          
-          mediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) {
-              chunks.push(e.data);
-            }
-          };
-          
-          mediaRecorder.onstop = async () => {
-            setIsProcessing(true);
-            const audioBlob = new Blob(chunks, { type: 'audio/webm' });
-            chunks = [];
-            
-            // Send to local Whisper service
-            const formData = new FormData();
-            formData.append('audio', audioBlob);
-            formData.append('language', language === 'zh-CN' ? 'zh' : 'en');
-            
-            try {
-              const response = await fetch('http://localhost:3001/transcribe', {
-                method: 'POST',
-                body: formData
-              });
-              
-              if (response.ok) {
-                const result = await response.json();
-                setContent(prevContent => prevContent + result.text);
-              } else {
-                console.error('Transcription failed');
-              }
-            } catch (error) {
-              console.error('Error sending audio for transcription:', error);
-            } finally {
-              setIsProcessing(false);
-            }
-          };
-          
-          setAudioRecorder(mediaRecorder);
-        } catch (error) {
-          console.error('Error accessing microphone:', error);
-        }
-      };
-      
-      setupRecorder();
-      
-      return () => {
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-          mediaRecorder.stop();
-        }
-      };
-    }
-  }, [language]);
+    // Just initialize empty state values, don't access the microphone yet
+    return () => {
+      // Cleanup if needed
+      if (audioRecorder && audioRecorder.state !== 'inactive') {
+        audioRecorder.stop();
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     // Initialize data fetch
@@ -187,8 +147,10 @@ function App() {
   }, []);
 
   useEffect(() => {
-    filterEntriesByDate(selectedDate);
-  }, [selectedDate, entries, filterEntriesByDate]);
+    if (entries.length > 0) {
+      filterEntriesByDate(selectedDate);
+    }
+  }, [entries, selectedDate, filterEntriesByDate]);
 
   const handleDateSelect = (date) => {
     setSelectedDate(date);
@@ -246,8 +208,8 @@ function App() {
     }
   };
 
-  // Replace toggleRecording with this enhanced version
-  const toggleRecording = () => {
+  // Update the toggleRecording function to initialize the recorder on demand
+  const toggleRecording = async () => {
     if (isRecording) {
       // Stop recording
       if (audioRecorder && audioRecorder.state !== 'inactive') {
@@ -256,18 +218,71 @@ function App() {
       clearInterval(recordingTimer);
       setRecordingTimer(null);
       setInterimTranscript('');
+      setIsRecording(false);
     } else {
-      // Start recording
-      if (audioRecorder) {
-        audioRecorder.start(1000); // Collect data every second
-        setRecordingTime(0);
-        const timer = setInterval(() => {
-          setRecordingTime(prev => prev + 1);
-        }, 1000);
-        setRecordingTimer(timer);
+      // Initialize recorder if we don't have one yet
+      if (!audioRecorder) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+          
+          let chunks = [];
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) {
+              chunks.push(e.data);
+            }
+          };
+          
+          mediaRecorder.onstop = async () => {
+            setIsProcessing(true);
+            const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+            chunks = [];
+            
+            // Send to local Whisper service
+            const formData = new FormData();
+            formData.append('audio', audioBlob);
+            formData.append('language', language === 'zh-CN' ? 'zh' : 'en');
+            
+            try {
+              const response = await fetch('http://localhost:3001/transcribe', {
+                method: 'POST',
+                body: formData
+              });
+              
+              if (response.ok) {
+                const result = await response.json();
+                setContent(prevContent => prevContent + result.text);
+              } else {
+                console.error('Transcription failed');
+              }
+            } catch (error) {
+              console.error('Error sending audio for transcription:', error);
+            } finally {
+              setIsProcessing(false);
+            }
+          };
+          
+          setAudioRecorder(mediaRecorder);
+          
+          // Start recording immediately
+          mediaRecorder.start(1000);
+        } catch (error) {
+          console.error('Error accessing microphone:', error);
+          return; // Exit if we can't access the microphone
+        }
+      } else {
+        // Use existing recorder
+        audioRecorder.start(1000);
       }
+      
+      // Setup timer
+      setRecordingTime(0);
+      const timer = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      setRecordingTimer(timer);
+      setIsRecording(true);
     }
-    setIsRecording(!isRecording);
   };
 
   // Language switching
@@ -359,21 +374,17 @@ function App() {
     }, 0);
   };
   
-  const renderMarkdown = (markdownText) => {
-    let html = markdownText;
+  const renderMarkdown = (markdown) => {
+    if (!markdown) return { __html: '' };
     
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    
-    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-    
-    html = html.replace(/## (.*)/g, '<h2>$1</h2>');
-    
-    html = html.replace(/- (.*)/g, '<li>$1</li>');
-    html = html.replace(/<li>(.*)<\/li>/g, '<ul><li>$1</li></ul>');
-    
-    html = html.replace(/\n\n/g, '</p><p>');
-    
-    return { __html: `<p>${html}</p>` };
+    try {
+      // For now, just return the raw HTML
+      // You can add a markdown processor library later if needed
+      return { __html: markdown.replace(/\n/g, '<br/>') };
+    } catch (error) {
+      console.error('Error rendering content:', error);
+      return { __html: markdown };
+    }
   };
 
   return (
@@ -414,8 +425,9 @@ function App() {
                   type="button" 
                   onClick={toggleRecording} 
                   className={isRecording ? "recording-active" : ""}
+                  disabled={isProcessing}
                 >
-                  {isRecording ? 'Stop recording' : 'Start recording'}
+                  {isProcessing ? 'Processing...' : isRecording ? 'Stop recording' : 'Start recording'}
                 </button>
                 
                 <button 
@@ -426,7 +438,7 @@ function App() {
                   {language === 'zh-CN' ? '中文' : 'English'}
                 </button>
                 
-                <button type="submit">Save</button>
+                <button type="submit" disabled={isProcessing}>Save</button>
               </div>
             </form>
           )}
@@ -478,29 +490,32 @@ function App() {
           <div className="entries">
             <h2>Entries for {selectedDate.toLocaleDateString()}</h2>
             {filteredEntries.length > 0 ? (
-              filteredEntries.map(entry => (
-                <div key={entry.id} className="entry">
-                  {editingEntryId === entry.id ? (
-                    null
-                  ) : (
-                    <>
-                      <div dangerouslySetInnerHTML={renderMarkdown(entry.content)} />
-                      <small>
-                        {new Date(entry.createdAt).toLocaleString()} 
-                        ({entry.type === 'voice' ? 'Voice input' : 'Text input'})
-                      </small>
-                      <button 
-                        className="edit-button" 
-                        onClick={() => startEditing(entry)}
-                      >
-                        Edit
-                      </button>
-                    </>
-                  )}
-                </div>
-              ))
+              filteredEntries.map(entry => {
+                console.log('Rendering entry:', entry.id, entry.content.substring(0, 50) + '...');
+                return (
+                  <div key={entry.id} className="entry">
+                    {editingEntryId === entry.id ? (
+                      null
+                    ) : (
+                      <>
+                        <div dangerouslySetInnerHTML={renderMarkdown(entry.content)} />
+                        <small>
+                          {new Date(entry.createdAt).toLocaleString()} 
+                          ({entry.type === 'voice' ? 'Voice input' : 'Text input'})
+                        </small>
+                        <button 
+                          className="edit-button" 
+                          onClick={() => startEditing(entry)}
+                        >
+                          Edit
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              })
             ) : (
-              <p>No entries for this date.</p>
+              <p>No entries for this date. {console.log('No entries for date:', selectedDate.toLocaleDateString())}</p>
             )}
           </div>
         </div>

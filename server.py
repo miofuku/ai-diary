@@ -54,15 +54,34 @@ class EntryUpdate(BaseModel):
 model = WhisperModel("small", device="cpu", compute_type="int8")
 
 # Data path - create data directory if it doesn't exist
-data_dir = Path('../data')
-data_dir.mkdir(exist_ok=True)
+data_dir = Path('./data')
 data_path = data_dir / 'entries.json'
 
-# Ensure data file exists
+# Enhanced ensure_data_file function with debugging
 def ensure_data_file():
-    if not data_path.exists():
-        with open(data_path, 'w') as f:
-            f.write('[]')
+    try:
+        # Make sure the directory exists
+        data_dir.mkdir(exist_ok=True)
+        
+        # Check if file exists, create it if not
+        if not data_path.exists():
+            print(f"Creating new entries file at {data_path.absolute()}")
+            with open(data_path, 'w') as f:
+                f.write('[]')
+        else:
+            # Verify the file is valid JSON
+            try:
+                with open(data_path, 'r') as f:
+                    json.load(f)
+                print(f"Data file exists and contains valid JSON at {data_path.absolute()}")
+            except json.JSONDecodeError:
+                print(f"Data file exists but contains invalid JSON. Resetting it.")
+                with open(data_path, 'w') as f:
+                    f.write('[]')
+    except Exception as e:
+        print(f"Error ensuring data file: {e}")
+        # Create an in-memory fallback if all else fails
+        return []
 
 # Optimize text format using OpenAI
 async def optimize_text(text):
@@ -141,37 +160,56 @@ async def transcribe_audio(
 
 # DIARY MANAGEMENT ENDPOINTS
 
-# Create new entry
+# Create new entry with enhanced debugging
 @app.post("/api/entries")
 async def create_entry(entry: EntryCreate):
-    ensure_data_file()
+    print(f"Received request to create entry: {entry.dict()}")
     
-    # Optimize text
-    optimized_content = await optimize_text(entry.content)
-    
-    # Use provided date or current date
-    created_at = entry.targetDate or datetime.now().isoformat()
-    
-    # Create entry object
-    new_entry = {
-        "id": int(time.time() * 1000),  # Timestamp as ID
-        "content": optimized_content,
-        "type": entry.type,
-        "createdAt": created_at
-    }
-    
-    # Read existing entries
-    with open(data_path, 'r') as f:
-        entries = json.load(f)
-    
-    # Add new entry
-    entries.append(new_entry)
-    
-    # Write back to file
-    with open(data_path, 'w') as f:
-        json.dump(entries, f, indent=2)
-    
-    return new_entry
+    try:
+        ensure_data_file()
+        
+        # Skip optimization temporarily for debugging
+        optimized_content = entry.content
+        # optimized_content = await optimize_text(entry.content)
+        
+        # Use provided date or current date
+        created_at = entry.targetDate or datetime.now().isoformat()
+        
+        # Create entry object
+        new_entry = {
+            "id": int(time.time() * 1000),  # Timestamp as ID
+            "content": optimized_content,
+            "type": entry.type,
+            "createdAt": created_at
+        }
+        
+        print(f"New entry object created: {new_entry}")
+        
+        # Read existing entries
+        try:
+            with open(data_path, 'r') as f:
+                entries = json.load(f)
+            print(f"Loaded {len(entries)} existing entries")
+        except Exception as e:
+            print(f"Error loading entries: {e}")
+            entries = []
+        
+        # Add new entry
+        entries.append(new_entry)
+        
+        # Write back to file
+        try:
+            with open(data_path, 'w') as f:
+                json.dump(entries, f, indent=2)
+            print(f"Wrote {len(entries)} entries to file")
+        except Exception as e:
+            print(f"Error writing entries to file: {e}")
+            raise
+        
+        return new_entry
+    except Exception as e:
+        print(f"Error creating entry: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Get all entries
 @app.get("/api/entries")
@@ -181,6 +219,7 @@ async def get_entries():
     with open(data_path, 'r') as f:
         entries = json.load(f)
     
+    print(f"Returning {len(entries)} entries")
     return entries
 
 # Get entries by date
@@ -189,8 +228,11 @@ async def get_entries_by_date(date: str):
     ensure_data_file()
     
     try:
+        # Handle timezone properly by removing the Z
         target_date = datetime.fromisoformat(date.replace('Z', '+00:00'))
+        print(f"Looking for entries on date: {target_date.strftime('%Y-%m-%d')}")
     except ValueError:
+        print(f"Invalid date format: {date}")
         raise HTTPException(status_code=400, detail="Invalid date format")
     
     with open(data_path, 'r') as f:
@@ -198,12 +240,20 @@ async def get_entries_by_date(date: str):
     
     filtered_entries = []
     for entry in entries:
-        entry_date = datetime.fromisoformat(entry['createdAt'].replace('Z', '+00:00'))
-        if (entry_date.day == target_date.day and 
-            entry_date.month == target_date.month and 
-            entry_date.year == target_date.year):
-            filtered_entries.append(entry)
+        try:
+            # Fix date parsing from entry.createdAt
+            entry_date = datetime.fromisoformat(entry['createdAt'].replace('Z', '+00:00'))
+            match = (
+                entry_date.day == target_date.day and
+                entry_date.month == target_date.month and
+                entry_date.year == target_date.year
+            )
+            if match:
+                filtered_entries.append(entry)
+        except Exception as e:
+            print(f"Error parsing date for entry {entry.get('id')}: {e}")
     
+    print(f"Found {len(filtered_entries)} entries for date {target_date.strftime('%Y-%m-%d')}")
     return filtered_entries
 
 # Update entry
