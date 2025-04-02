@@ -50,8 +50,16 @@ class EntryUpdate(BaseModel):
     newContent: Optional[str] = None
     appendMode: Optional[bool] = False
 
-# Load Whisper model (adjust model size based on your hardware)
-model = WhisperModel("base", device="cpu", compute_type="int8")
+# Load Whisper model - use base model to reduce CPU usage
+model = None  # Initialize as None, load only when needed
+
+# Function to lazily load the model when required
+def get_whisper_model():
+    global model
+    if model is None:
+        print("Loading Whisper model (base)...")
+        model = WhisperModel("base", device="cpu", compute_type="int8")
+    return model
 
 # Data path - create data directory if it doesn't exist
 data_dir = Path('./data')
@@ -84,25 +92,36 @@ def ensure_data_file():
         return []
 
 # Optimize text format using OpenAI
-async def optimize_text(text):
+async def optimize_text(content: str) -> str:
+    """Optimize text content using LLM to correct errors and improve readability"""
+    if not content or not content.strip():
+        return content
+        
     try:
-        response = openai.chat.completions.create(
+        print(f"Optimizing text content ({len(content)} chars)")
+        response = await openai.chat.completions.acreate(
             model="gpt-4o-mini",
             messages=[
                 {
-                    "role": "system",
-                    "content": "You are a text optimization assistant, responsible for optimizing the diary content to be more elegant, while keeping the original meaning and improving the expression."
+                    "role": "system", 
+                    "content": "You are a diary assistant. Correct any transcription errors and typos in the user's text without changing meaning. Fix grammar issues, improve flow, and preserve the content's emotion and style. Keep the corrections minimal."
                 },
                 {
                     "role": "user",
-                    "content": text
+                    "content": f"Please optimize this diary entry, correcting any transcription errors while preserving its meaning: {content}"
                 }
-            ]
+            ],
+            temperature=0.3,
+            max_tokens=1000
         )
-        return response.choices[0].message.content
+        
+        optimized = response.choices[0].message.content
+        print(f"Text optimized successfully")
+        return optimized
     except Exception as e:
-        print(f"Text optimization failed: {e}")
-        return text  # Return original text if optimization fails
+        print(f"Error optimizing text: {e}")
+        # If optimization fails, return the original content
+        return content
 
 # Integrate diary content using LLM
 async def integrate_diary_content(existing_content, new_content):
@@ -130,7 +149,7 @@ async def integrate_diary_content(existing_content, new_content):
         # Fallback to simple concatenation
         return f"{existing_content}\n\n{new_content}"
 
-# TRANSCRIPTION ENDPOINT
+# Update the transcribe endpoint to be more CPU-efficient
 @app.post("/transcribe")
 async def transcribe_audio(
     audio: UploadFile = File(...),
@@ -142,12 +161,18 @@ async def transcribe_audio(
         temp_path = temp_file.name
     
     try:
-        # Transcribe with Whisper
-        segments, info = model.transcribe(
+        # Get or load the model
+        whisper_model = get_whisper_model()
+        
+        # Use most efficient settings
+        segments, _ = whisper_model.transcribe(
             temp_path, 
             language=language if language else None,
-            vad_filter=True,
-            word_timestamps=False
+            beam_size=1,  # Smaller beam size = less computation
+            best_of=1,    # Don't generate multiple candidates
+            vad_filter=True,  # Filter silent parts
+            vad_parameters=dict(min_silence_duration_ms=500),  # Process larger chunks
+            word_timestamps=False  # Skip word-level timestamps to save CPU
         )
         
         # Collect transcribed text
@@ -156,7 +181,12 @@ async def transcribe_audio(
         return {"text": result}
     finally:
         # Clean up temp file
-        os.unlink(temp_path)
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+        
+        # Force garbage collection to free memory
+        import gc
+        gc.collect()
 
 # DIARY MANAGEMENT ENDPOINTS
 
@@ -168,9 +198,8 @@ async def create_entry(entry: EntryCreate):
     try:
         ensure_data_file()
         
-        # Skip optimization temporarily for debugging
-        optimized_content = entry.content
-        # optimized_content = await optimize_text(entry.content)
+        # Re-enable optimization
+        optimized_content = await optimize_text(entry.content)
         
         # Use provided date or current date
         created_at = entry.targetDate or datetime.now().isoformat()

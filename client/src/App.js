@@ -208,7 +208,7 @@ function App() {
     }
   };
 
-  // Update the toggleRecording function to initialize the recorder on demand
+  // Update the toggleRecording function for more efficient recording
   const toggleRecording = async () => {
     if (isRecording) {
       // Stop recording
@@ -223,8 +223,23 @@ function App() {
       // Initialize recorder if we don't have one yet
       if (!audioRecorder) {
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: { 
+              echoCancellation: true,
+              noiseSuppression: true,
+              sampleRate: 16000  // Lower sample rate = smaller file
+            } 
+          });
+          
+          // Use a more compressed audio format if supported
+          const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+            ? 'audio/webm;codecs=opus' 
+            : 'audio/webm';
+          
+          const mediaRecorder = new MediaRecorder(stream, { 
+            mimeType: mimeType,
+            audioBitsPerSecond: 32000  // Lower bitrate = smaller file
+          });
           
           let chunks = [];
           mediaRecorder.ondataavailable = (e) => {
@@ -235,7 +250,7 @@ function App() {
           
           mediaRecorder.onstop = async () => {
             setIsProcessing(true);
-            const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+            const audioBlob = new Blob(chunks, { type: mimeType });
             chunks = [];
             
             // Send to local Whisper service
