@@ -6,10 +6,8 @@ function App() {
   const [entries, setEntries] = useState([]);
   const [content, setContent] = useState('');
   const [isRecording, setIsRecording] = useState(false);
-  const [recognition, setRecognition] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [filteredEntries, setFilteredEntries] = useState([]);
-  const [interimTranscript, setInterimTranscript] = useState('');
   // eslint-disable-next-line no-unused-vars
   const [language, setLanguage] = useState('zh-CN');
   const [recordingTime, setRecordingTime] = useState(0);
@@ -51,96 +49,6 @@ function App() {
     console.log('Filtered entries:', filtered.length);
     setFilteredEntries(filtered);
   }, [entries]);
-
-  // Create recognition instance
-  const createRecognitionInstance = useCallback((lang) => {
-    if (!window.webkitSpeechRecognition) return null;
-    
-    const instance = new window.webkitSpeechRecognition();
-    instance.continuous = true;
-    instance.interimResults = true;
-    instance.lang = lang;
-    
-    // Configure handlers immediately when creating instance
-    instance.onresult = (event) => {
-      let interimText = '';
-      let finalText = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalText += transcript + ' ';
-        } else {
-          interimText += transcript;
-        }
-      }
-
-      setInterimTranscript(interimText);
-      if (finalText) {
-        setContent(prevContent => prevContent + finalText);
-      }
-    };
-
-    instance.onerror = (event) => {
-      console.error('Speech recognition error', event.error);
-      if (event.error === 'no-speech') {
-        if (isRecording) {
-          instance.stop();
-          setTimeout(() => {
-            if (isRecording) instance.start();
-          }, 100);
-        }
-      }
-    };
-    
-    return instance;
-  }, [isRecording]);
-
-  // Initialize recognition on component mount and language change
-  useEffect(() => {
-    // Clean up any existing recognition instance
-    if (recognition) {
-      recognition.stop();
-    }
-    
-    // Create new instance with current language
-    const newRecognition = createRecognitionInstance(language);
-    setRecognition(newRecognition);
-    
-    // Start if we should be recording
-    if (isRecording && newRecognition) {
-      try {
-        newRecognition.start();
-        console.log("Recognition started with language:", language);
-      } catch (error) {
-        console.error("Failed to start recognition:", error);
-      }
-    }
-    
-    // Cleanup function
-    return () => {
-      if (newRecognition) {
-        try {
-          newRecognition.stop();
-          console.log("Recognition stopped during cleanup");
-        } catch (error) {
-          console.error("Error stopping recognition during cleanup:", error);
-        }
-      }
-    };
-  }, [language, createRecognitionInstance, isRecording, recognition]);
-
-  // Replace the existing audio recorder useEffect with this lazy-loading approach
-  useEffect(() => {
-    // Just initialize empty state values, don't access the microphone yet
-    return () => {
-      // Cleanup if needed
-      if (audioRecorder && audioRecorder.state !== 'inactive') {
-        audioRecorder.stop();
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     // Initialize data fetch
@@ -209,32 +117,17 @@ function App() {
     }
   };
 
-  // Update the toggleRecording function for more efficient recording
   const toggleRecording = async () => {
     if (isRecording) {
       // Stop recording
       if (audioRecorder && audioRecorder.state !== 'inactive') {
         audioRecorder.stop();
       }
-      if (recognition) {
-        recognition.stop();
-      }
       clearInterval(recordingTimer);
       setRecordingTimer(null);
-      setInterimTranscript('');
       setIsRecording(false);
     } else {
-      // Start WebSpeech immediately for real-time results
-      if (recognition) {
-        try {
-          recognition.start();
-          console.log("WebSpeech recognition started for real-time feedback");
-        } catch (error) {
-          console.error("Failed to start WebSpeech:", error);
-        }
-      }
-      
-      // Initialize recorder for high-quality Whisper results
+      // Initialize recorder if we don't have one yet
       if (!audioRecorder) {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -252,7 +145,7 @@ function App() {
           
           const mediaRecorder = new MediaRecorder(stream, { 
             mimeType: mimeType,
-            audioBitsPerSecond: 32000  // Lower bitrate = smaller file
+            audioBitsPerSecond: 32000
           });
           
           let chunks = [];
@@ -297,7 +190,7 @@ function App() {
           mediaRecorder.start(1000);
         } catch (error) {
           console.error('Error accessing microphone:', error);
-          return; // Exit if we can't access the microphone
+          return;
         }
       } else {
         // Use existing recorder
@@ -427,14 +320,6 @@ function App() {
                 placeholder={`Write your diary for ${selectedDate.toLocaleDateString()}...`}
               />
               
-              {isRecording && (
-                <div className="recording-indicator">
-                  <div className="recording-pulse"></div>
-                  <span>Recording... {formatRecordingTime(recordingTime)}</span>
-                  <div className="interim-text">{interimTranscript}</div>
-                </div>
-              )}
-              
               <div className="button-group">
                 <button 
                   type="button" 
@@ -527,6 +412,13 @@ function App() {
               <p>No entries for this date. {console.log('No entries for date:', selectedDate.toLocaleDateString())}</p>
             )}
           </div>
+
+          {isRecording && (
+            <div className="recording-indicator">
+              <div className="recording-pulse"></div>
+              <span>Recording... {formatRecordingTime(recordingTime)}</span>
+            </div>
+          )}
         </div>
       </div>
     </div>
