@@ -356,5 +356,91 @@ async def update_entry(id: int, entry_update: EntryUpdate):
     
     return entries[entry_index]
 
+# Add a new endpoint to identify topic threads across entries
+@app.get("/api/topic-threads")
+async def get_topic_threads():
+    ensure_data_file()
+    
+    # Read all entries
+    with open(data_path, 'r') as f:
+        entries = json.load(f)
+    
+    try:
+        # Extract topic threads using LLM
+        topic_threads = await analyze_topic_threads(entries)
+        return topic_threads
+    except Exception as e:
+        print(f"Error analyzing topic threads: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Function to analyze entries and identify recurring topics/threads
+async def analyze_topic_threads(entries):
+    if not entries:
+        return []
+    
+    # Prepare content for analysis
+    entries_with_dates = [
+        {
+            "id": entry["id"],
+            "date": entry["createdAt"],
+            "content": entry["content"][:500]  # Use first 500 chars for efficiency
+        }
+        for entry in entries
+    ]
+    
+    # Sort by date
+    entries_with_dates.sort(key=lambda x: x["date"])
+    
+    try:
+        # Use LLM to identify recurring topics and connections
+        response = await openai.chat.completions.acreate(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are an AI that analyzes diary entries to identify recurring topics and their progression over time.
+
+Your task:
+1. Identify 3-5 major recurring topics/themes across these diary entries
+2. For each topic, identify relevant entries that mention or relate to it
+3. Analyze how the topic progresses or evolves across these entries
+4. Return your analysis in a structured JSON format
+
+Focus on topics like:
+- Projects or goals the person is working on
+- Relationships with specific people
+- Health or personal development journeys
+- Recurring challenges or obstacles
+- Emotional patterns or mood changes"""
+                },
+                {
+                    "role": "user",
+                    "content": f"Here are the diary entries in chronological order. Please identify recurring topics and their progression: {json.dumps(entries_with_dates)}"
+                }
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"}
+        )
+        
+        # Parse the response
+        threads_data = json.loads(response.choices[0].message.content)
+        
+        # Add entry links and clean up the response
+        for topic in threads_data.get("topics", []):
+            # Get full content for each relevant entry
+            for mention in topic.get("mentions", []):
+                entry_id = mention.get("entryId")
+                if entry_id:
+                    # Find the full entry
+                    full_entry = next((e for e in entries if e["id"] == entry_id), None)
+                    if full_entry:
+                        mention["fullContent"] = full_entry["content"]
+                        mention["date"] = full_entry["createdAt"]
+        
+        return threads_data
+    except Exception as e:
+        print(f"Error in topic analysis: {e}")
+        return {"topics": []}
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3001) 

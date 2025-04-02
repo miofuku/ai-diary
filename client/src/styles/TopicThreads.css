@@ -1,0 +1,151 @@
+.topic-threads-container {
+  margin: 30px 0;
+  padding: 20px;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.topic-threads-container h2 {
+  margin-top: 0;
+  color: #2c3e50;
+  font-size: 1.8rem;
+}
+
+.topic-description {
+  color: #666;
+  margin-bottom: 20px;
+}
+
+.topic-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.topic-card {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  overflow: hidden;
+  background-color: white;
+  transition: all 0.3s ease;
+}
+
+.topic-card.expanded {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.topic-header {
+  padding: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  background-color: #fff;
+  position: relative;
+}
+
+.topic-header:hover {
+  background-color: #f5f5f5;
+}
+
+.topic-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #333;
+  flex: 0 0 200px;
+}
+
+.topic-summary {
+  flex: 1;
+  font-size: 0.9rem;
+  color: #666;
+  margin: 0 10px;
+}
+
+.expand-icon {
+  font-size: 0.8rem;
+  color: #777;
+}
+
+.topic-timeline {
+  padding: 20px;
+  background-color: #f9f9f9;
+  border-top: 1px solid #eee;
+}
+
+.progression-summary {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px dashed #ddd;
+}
+
+.progression-summary h4 {
+  margin-top: 0;
+  color: #2c3e50;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.timeline-entry {
+  display: flex;
+  align-items: flex-start;
+}
+
+.timeline-date {
+  flex: 0 0 100px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #555;
+  padding-top: 2px;
+}
+
+.timeline-connector {
+  flex: 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0 10px;
+}
+
+.connector-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #3498db;
+  margin: 4px 0;
+}
+
+.connector-line {
+  width: 2px;
+  height: 100%;
+  background-color: #ddd;
+  flex-grow: 1;
+}
+
+.timeline-content {
+  flex: 1;
+  background-color: white;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.entry-preview {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #333;
+}
+
+.loading, .error, .no-topics {
+  padding: 20px;
+  text-align: center;
+  color: #666;
+}
+
+.error {
+  color: #e74c3c;
+} 

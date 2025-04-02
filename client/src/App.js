@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
 import DiaryCalendar from './components/DiaryCalendar';
+import TopicThreads from './components/TopicThreads';
 
 function App() {
   const [entries, setEntries] = useState([]);
@@ -412,6 +413,8 @@ function App() {
               <p>No entries for this date. {console.log('No entries for date:', selectedDate.toLocaleDateString())}</p>
             )}
           </div>
+
+          <TopicThreads />
 
           {isRecording && (
             <div className="recording-indicator">
