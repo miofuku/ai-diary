@@ -10,6 +10,7 @@ function App() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [filteredEntries, setFilteredEntries] = useState([]);
   const [interimTranscript, setInterimTranscript] = useState('');
+  // eslint-disable-next-line no-unused-vars
   const [language, setLanguage] = useState('zh-CN');
   const [recordingTime, setRecordingTime] = useState(0);
   const [recordingTimer, setRecordingTimer] = useState(null);
@@ -215,19 +216,32 @@ function App() {
       if (audioRecorder && audioRecorder.state !== 'inactive') {
         audioRecorder.stop();
       }
+      if (recognition) {
+        recognition.stop();
+      }
       clearInterval(recordingTimer);
       setRecordingTimer(null);
       setInterimTranscript('');
       setIsRecording(false);
     } else {
-      // Initialize recorder if we don't have one yet
+      // Start WebSpeech immediately for real-time results
+      if (recognition) {
+        try {
+          recognition.start();
+          console.log("WebSpeech recognition started for real-time feedback");
+        } catch (error) {
+          console.error("Failed to start WebSpeech:", error);
+        }
+      }
+      
+      // Initialize recorder for high-quality Whisper results
       if (!audioRecorder) {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ 
             audio: { 
               echoCancellation: true,
               noiseSuppression: true,
-              sampleRate: 16000  // Lower sample rate = smaller file
+              sampleRate: 16000
             } 
           });
           
@@ -298,20 +312,6 @@ function App() {
       setRecordingTimer(timer);
       setIsRecording(true);
     }
-  };
-
-  // Language switching
-  const switchLanguage = () => {
-    const newLanguage = language === 'zh-CN' ? 'en-US' : 'zh-CN';
-    console.log(`Switching language from ${language} to ${newLanguage}`);
-    
-    // Stop recording if active
-    if (isRecording && recognition) {
-      recognition.stop();
-    }
-    
-    // Update language
-    setLanguage(newLanguage);
   };
 
   const formatRecordingTime = (seconds) => {
@@ -445,15 +445,9 @@ function App() {
                   {isProcessing ? 'Processing...' : isRecording ? 'Stop recording' : 'Start recording'}
                 </button>
                 
-                <button 
-                  type="button" 
-                  onClick={switchLanguage}
-                  className="language-toggle"
-                >
-                  {language === 'zh-CN' ? '中文' : 'English'}
+                <button type="submit" disabled={!content.trim() || isRecording}>
+                  Save
                 </button>
-                
-                <button type="submit" disabled={isProcessing}>Save</button>
               </div>
             </form>
           )}

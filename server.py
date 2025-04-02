@@ -164,15 +164,24 @@ async def transcribe_audio(
         # Get or load the model
         whisper_model = get_whisper_model()
         
+        # Map language codes correctly - use only valid Whisper language codes
+        whisper_language = None
+        if language:
+            # Whisper only accepts 'zh' for Chinese (both simplified and traditional)
+            # No need to map to 'zh-cn' as that's not a valid Whisper language code
+            whisper_language = language
+        
+        print(f"Transcribing with language: {whisper_language}")
+        
         # Use most efficient settings
         segments, _ = whisper_model.transcribe(
             temp_path, 
-            language=language if language else None,
-            beam_size=1,  # Smaller beam size = less computation
-            best_of=1,    # Don't generate multiple candidates
-            vad_filter=True,  # Filter silent parts
-            vad_parameters=dict(min_silence_duration_ms=500),  # Process larger chunks
-            word_timestamps=False  # Skip word-level timestamps to save CPU
+            language=whisper_language,
+            beam_size=1,
+            best_of=1,
+            vad_filter=True,
+            vad_parameters=dict(min_silence_duration_ms=500),
+            word_timestamps=False
         )
         
         # Collect transcribed text

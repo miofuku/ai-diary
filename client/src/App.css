@@ -252,26 +252,21 @@ button:hover {
 
 .interim-text {
   font-style: italic;
-  color: #666;
+  color: #333;
   margin-left: 10px;
   flex-grow: 1;
   text-align: left;
   min-height: 20px;
   width: 100%;
   margin-top: 5px;
+  background-color: #f3f3f3;
+  padding: 5px;
+  border-radius: 4px;
+  border-left: 3px solid #007bff;
 }
 
 .recording-active {
   background-color: #ff3333 !important;
-}
-
-/* Styling for the language button */
-button.language-toggle {
-  background-color: #6c757d;
-}
-
-button.language-toggle:hover {
-  background-color: #5a6268;
 }
 
 /* Add styles for language detection */
