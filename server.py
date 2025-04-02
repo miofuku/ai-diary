@@ -51,7 +51,7 @@ class EntryUpdate(BaseModel):
     appendMode: Optional[bool] = False
 
 # Load Whisper model (adjust model size based on your hardware)
-model = WhisperModel("small", device="cpu", compute_type="int8")
+model = WhisperModel("base", device="cpu", compute_type="int8")
 
 # Data path - create data directory if it doesn't exist
 data_dir = Path('./data')
