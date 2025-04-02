@@ -114,12 +114,10 @@ app.get('/api/entries/:date', async (req, res) => {
 app.put('/api/entries/:id', async (req, res) => {
   try {
     await ensureDataFile();
-    const { content } = req.body;
+    const { existingContent, newContent, appendMode, content } = req.body;
     const entryId = parseInt(req.params.id);
     
-    // Optimize text
-    const optimizedContent = await optimizeText(content);
-    
+    // Read existing entries
     const entries = JSON.parse(await fs.readFile(dataPath, 'utf8'));
     const entryIndex = entries.findIndex(entry => entry.id === entryId);
     
@@ -127,7 +125,18 @@ app.put('/api/entries/:id', async (req, res) => {
       return res.status(404).json({ error: 'Entry not found' });
     }
     
-    entries[entryIndex].content = optimizedContent;
+    let finalContent;
+    
+    // Handle intelligent content merging when in append mode
+    if (appendMode && existingContent && newContent) {
+      finalContent = await integrateDiaryContent(existingContent, newContent);
+    } else {
+      // For manual edits, use the content as provided
+      finalContent = content;
+    }
+    
+    // Update the entry with the new content
+    entries[entryIndex].content = finalContent;
     await fs.writeFile(dataPath, JSON.stringify(entries, null, 2));
     
     res.json(entries[entryIndex]);
@@ -135,6 +144,35 @@ app.put('/api/entries/:id', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Helper function to intelligently merge diary content using LLM
+async function integrateDiaryContent(existingContent, newContent) {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `You are a diary integration assistant. Your task is to integrate new diary content with existing content. 
+          If the new content is related to the existing content, integrate it seamlessly, enhancing the narrative and connecting the ideas.
+          If the new content is about a different topic, start a new paragraph. 
+          Enhance the writing style to be cohesive and engaging, while preserving the original meaning.
+          Never add timestamps or date markers.`
+        },
+        {
+          role: "user",
+          content: `Existing diary content: "${existingContent}"\nNew diary content to integrate: "${newContent}"`
+        }
+      ]
+    });
+    
+    return completion.choices[0].message.content;
+  } catch (error) {
+    console.error('Content integration failed:', error);
+    // Fallback to simple concatenation if API fails
+    return `${existingContent}\n\n${newContent}`;
+  }
+}
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);

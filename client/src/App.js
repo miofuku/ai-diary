@@ -134,21 +134,47 @@ function App() {
     if (!content.trim()) return;
 
     try {
-      const response = await fetch('http://localhost:3001/api/entries', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          content,
-          type: isRecording ? 'voice' : 'text',
-          targetDate: selectedDate.toISOString()
-        }),
-      });
+      // Check if entries already exist for this date
+      if (filteredEntries.length > 0) {
+        // Get the most recent entry for this date
+        const latestEntry = filteredEntries[filteredEntries.length - 1];
+        
+        // Send both the existing content and new content to the server
+        // Let the server handle the intelligent merging
+        const response = await fetch(`http://localhost:3001/api/entries/${latestEntry.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            existingContent: latestEntry.content,
+            newContent: content,
+            appendMode: true
+          }),
+        });
 
-      if (response.ok) {
-        setContent('');
-        fetchEntries();
+        if (response.ok) {
+          setContent('');
+          fetchEntries();
+        }
+      } else {
+        // No existing entries for this date, create a new one
+        const response = await fetch('http://localhost:3001/api/entries', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            content: content,
+            type: isRecording ? 'voice' : 'text',
+            targetDate: selectedDate.toISOString()
+          }),
+        });
+
+        if (response.ok) {
+          setContent('');
+          fetchEntries();
+        }
       }
     } catch (error) {
       console.error('Save diary failed:', error);
