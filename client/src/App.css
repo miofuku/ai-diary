@@ -437,3 +437,11 @@ button:hover {
 .react-calendar__navigation__arrow {
   border-radius: 50%;
 }
+
+/* Add to your CSS file (likely App.css or a component-specific CSS) */
+.entry-edit-button {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  z-index: 10;
+}

@@ -399,7 +399,7 @@ function App() {
                           ({entry.type === 'voice' ? 'Voice input' : 'Text input'})
                         </small>
                         <button 
-                          className="edit-button" 
+                          className="entry-edit-button" 
                           onClick={() => startEditing(entry)}
                         >
                           Edit
