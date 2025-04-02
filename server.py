@@ -14,33 +14,26 @@ from openai import OpenAI
 from faster_whisper import WhisperModel
 import os
 from dotenv import load_dotenv
-import requests
-import httpx
 
 # Load environment variables
 load_dotenv()
 
-# Configure OpenAI client
-http_client = httpx.Client(
-    base_url="https://api.openai.com/v1",
-    follow_redirects=True,
-    timeout=60.0
-)
-
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    http_client=http_client
-)
-
+# Configure FastAPI app
 app = FastAPI()
 
-# Setup CORS
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],  # In production, restrict this to your frontend URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# Configure OpenAI client
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    http_client=None  # Use the default HTTP client without custom parameters
 )
 
 # Data models
@@ -52,14 +45,14 @@ class Entry(BaseModel):
 
 class EntryCreate(BaseModel):
     content: str
-    type: str
+    type: str = "text"
     targetDate: Optional[str] = None
 
 class EntryUpdate(BaseModel):
     content: Optional[str] = None
+    appendMode: Optional[bool] = False
     existingContent: Optional[str] = None
     newContent: Optional[str] = None
-    appendMode: Optional[bool] = False
 
 # Load Whisper model - use base model to reduce CPU usage
 model = None  # Initialize as None, load only when needed
@@ -103,14 +96,14 @@ def ensure_data_file():
         return []
 
 # Optimize text format using OpenAI
-async def optimize_text(content: str) -> str:
+def optimize_text(content: str) -> str:
     """Optimize text content using LLM to correct errors and improve readability"""
     if not content or not content.strip():
         return content
         
     try:
         print(f"Optimizing text content ({len(content)} chars)")
-        response = await client.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {
@@ -135,9 +128,9 @@ async def optimize_text(content: str) -> str:
         return content
 
 # Enhanced integrate_diary_content function with smart formatting
-async def integrate_diary_content(existing_content, new_content):
+def integrate_diary_content(existing_content, new_content):
     try:
-        response = await client.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {
@@ -240,7 +233,7 @@ async def create_entry(entry: EntryCreate):
         ensure_data_file()
         
         # Re-enable optimization
-        optimized_content = await optimize_text(entry.content)
+        optimized_content = optimize_text(entry.content)
         
         # Use provided date or current date
         created_at = entry.targetDate or datetime.now().isoformat()
@@ -348,7 +341,7 @@ async def update_entry(id: int, entry_update: EntryUpdate):
     # Process content update
     if entry_update.appendMode and entry_update.existingContent and entry_update.newContent:
         # Intelligent content merging
-        final_content = await integrate_diary_content(
+        final_content = integrate_diary_content(
             entry_update.existingContent, 
             entry_update.newContent
         )
@@ -378,14 +371,14 @@ async def get_topic_threads():
     
     try:
         # Extract topic threads using LLM
-        topic_threads = await analyze_topic_threads(entries)
+        topic_threads = analyze_topic_threads(entries)
         return topic_threads
     except Exception as e:
         print(f"Error analyzing topic threads: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Revert to using OpenAI API but keep improvements for Chinese content
-async def analyze_topic_threads(entries):
+# Update the analyze_topic_threads function to be synchronous
+def analyze_topic_threads(entries):
     if not entries:
         return {"topics": []}
     
@@ -409,41 +402,41 @@ async def analyze_topic_threads(entries):
         # Convert to JSON with proper Chinese character handling
         entries_json = json.dumps(entries_with_dates, ensure_ascii=False)
         
-        # Use OpenAI with improved prompt focusing on Chinese content
-        response = await client.chat.completions.create(
+        # Use OpenAI synchronously
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {
                     "role": "system",
                     "content": """You are an AI that analyzes diary entries to identify recurring topics and their progression over time.
-
-Your task:
-1. Identify ANY recurring topics/themes across these diary entries
-2. For each topic, identify relevant entries that mention or relate to it
-3. Analyze how the topic progresses or evolves across these entries
-4. Return your analysis in a structured JSON format with the following exact structure:
-{
-  "topics": [
-    {
-      "name": "Topic Name",
-      "summary": "Brief summary of what this topic is about",
-      "progression": "Description of how this topic evolves over time",
-      "mentions": [
-        {
-          "entryId": 123456789,
-          "date": "ISO date",
-          "excerpt": "Relevant excerpt from the entry"
-        }
-      ]
-    }
-  ]
-}
-
-IMPORTANT: 
-- The diary entries are mainly in Chinese (中文)
-- CAREFULLY look for recurring topics 
-- Even if topics only appear in 2 entries, include them as important connections
-- Pay close attention to projects, tools, platforms, and activities mentioned repeatedly"""
+                    
+                    Your task:
+                    1. Identify ANY recurring topics/themes across these diary entries
+                    2. For each topic, identify relevant entries that mention or relate to it
+                    3. Analyze how the topic progresses or evolves across these entries
+                    4. Return your analysis in a structured JSON format with the following exact structure:
+                    {
+                      "topics": [
+                        {
+                          "name": "Topic Name",
+                          "summary": "Brief summary of what this topic is about",
+                          "progression": "Description of how this topic evolves over time",
+                          "mentions": [
+                            {
+                              "entryId": 123456789,
+                              "date": "ISO date",
+                              "excerpt": "Relevant excerpt from the entry"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                    
+                    IMPORTANT: 
+                    - The diary entries are mainly in Chinese (中文)
+                    - CAREFULLY look for recurring topics 
+                    - Even if topics only appear in 2 entries, include them as important connections
+                    - Pay close attention to projects, tools, platforms, and activities mentioned repeatedly"""
                 },
                 {
                     "role": "user",
