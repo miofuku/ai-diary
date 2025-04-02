@@ -404,3 +404,36 @@ button:hover {
 .entry strong {
   font-weight: bold;
 }
+
+/* Add these styles to fix calendar navigation visibility */
+.react-calendar__navigation {
+  display: flex;
+  height: 44px;
+  margin-bottom: 1em;
+}
+
+.react-calendar__navigation button {
+  min-width: 44px;
+  background: none;
+  font-size: 16px;
+  color: #333;
+  padding: 0 8px;
+}
+
+.react-calendar__navigation button:enabled:hover,
+.react-calendar__navigation button:enabled:focus {
+  background-color: #e6e6e6;
+}
+
+.react-calendar__navigation button[disabled] {
+  background-color: #f0f0f0;
+}
+
+.react-calendar__navigation__label {
+  font-weight: bold;
+  flex-grow: 1;
+}
+
+.react-calendar__navigation__arrow {
+  border-radius: 50%;
+}

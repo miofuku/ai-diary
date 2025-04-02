@@ -10,16 +10,27 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-import openai
+from openai import OpenAI
 from faster_whisper import WhisperModel
 import os
 from dotenv import load_dotenv
+import requests
+import httpx
 
 # Load environment variables
 load_dotenv()
 
-# Configure OpenAI
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Configure OpenAI client
+http_client = httpx.Client(
+    base_url="https://api.openai.com/v1",
+    follow_redirects=True,
+    timeout=60.0
+)
+
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    http_client=http_client
+)
 
 app = FastAPI()
 
@@ -99,8 +110,8 @@ async def optimize_text(content: str) -> str:
         
     try:
         print(f"Optimizing text content ({len(content)} chars)")
-        response = await openai.chat.completions.acreate(
-            model="gpt-4o-mini",
+        response = await client.chat.completions.create(
+            model="gpt-3.5-turbo",
             messages=[
                 {
                     "role": "system", 
@@ -126,8 +137,8 @@ async def optimize_text(content: str) -> str:
 # Enhanced integrate_diary_content function with smart formatting
 async def integrate_diary_content(existing_content, new_content):
     try:
-        response = openai.chat.completions.create(
-            model="gpt-4o-mini",
+        response = await client.chat.completions.create(
+            model="gpt-3.5-turbo",
             messages=[
                 {
                     "role": "system",
@@ -373,17 +384,17 @@ async def get_topic_threads():
         print(f"Error analyzing topic threads: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Function to analyze entries and identify recurring topics/threads
+# Revert to using OpenAI API but keep improvements for Chinese content
 async def analyze_topic_threads(entries):
     if not entries:
-        return []
+        return {"topics": []}
     
-    # Prepare content for analysis
+    # Prepare content for analysis with full context
     entries_with_dates = [
         {
             "id": entry["id"],
             "date": entry["createdAt"],
-            "content": entry["content"][:500]  # Use first 500 chars for efficiency
+            "content": entry["content"]  # Use full content for better analysis
         }
         for entry in entries
     ]
@@ -391,55 +402,92 @@ async def analyze_topic_threads(entries):
     # Sort by date
     entries_with_dates.sort(key=lambda x: x["date"])
     
+    # Debug entries for troubleshooting
+    print(f"Analyzing {len(entries_with_dates)} entries with OpenAI")
+    
     try:
-        # Use LLM to identify recurring topics and connections
-        response = await openai.chat.completions.acreate(
-            model="gpt-4o-mini",
+        # Convert to JSON with proper Chinese character handling
+        entries_json = json.dumps(entries_with_dates, ensure_ascii=False)
+        
+        # Use OpenAI with improved prompt focusing on Chinese content
+        response = await client.chat.completions.create(
+            model="gpt-3.5-turbo",
             messages=[
                 {
                     "role": "system",
                     "content": """You are an AI that analyzes diary entries to identify recurring topics and their progression over time.
 
 Your task:
-1. Identify 3-5 major recurring topics/themes across these diary entries
+1. Identify ANY recurring topics/themes across these diary entries
 2. For each topic, identify relevant entries that mention or relate to it
 3. Analyze how the topic progresses or evolves across these entries
-4. Return your analysis in a structured JSON format
+4. Return your analysis in a structured JSON format with the following exact structure:
+{
+  "topics": [
+    {
+      "name": "Topic Name",
+      "summary": "Brief summary of what this topic is about",
+      "progression": "Description of how this topic evolves over time",
+      "mentions": [
+        {
+          "entryId": 123456789,
+          "date": "ISO date",
+          "excerpt": "Relevant excerpt from the entry"
+        }
+      ]
+    }
+  ]
+}
 
-Focus on topics like:
-- Projects or goals the person is working on
-- Relationships with specific people
-- Health or personal development journeys
-- Recurring challenges or obstacles
-- Emotional patterns or mood changes"""
+IMPORTANT: 
+- The diary entries are mainly in Chinese (中文)
+- CAREFULLY look for recurring topics 
+- Even if topics only appear in 2 entries, include them as important connections
+- Pay close attention to projects, tools, platforms, and activities mentioned repeatedly"""
                 },
                 {
                     "role": "user",
-                    "content": f"Here are the diary entries in chronological order. Please identify recurring topics and their progression: {json.dumps(entries_with_dates)}"
+                    "content": f"Here are the diary entries in chronological order. Please identify ALL recurring topics: {entries_json}"
                 }
             ],
-            temperature=0.3,
+            temperature=0.1,  # Lower temperature for more deterministic results
             response_format={"type": "json_object"}
         )
         
         # Parse the response
-        threads_data = json.loads(response.choices[0].message.content)
+        response_content = response.choices[0].message.content
+        print(f"OpenAI topic analysis response preview: {response_content[:150]}...")
         
+        # Parse JSON response preserving Chinese characters
+        threads_data = json.loads(response_content)
+        
+        # Rest of your code to process the response remains the same
         # Add entry links and clean up the response
         for topic in threads_data.get("topics", []):
-            # Get full content for each relevant entry
+            # Remove duplicates from mentions
+            seen_ids = set()
+            unique_mentions = []
+            
             for mention in topic.get("mentions", []):
                 entry_id = mention.get("entryId")
-                if entry_id:
+                if entry_id and entry_id not in seen_ids:
+                    seen_ids.add(entry_id)
+                    unique_mentions.append(mention)
+                    
                     # Find the full entry
                     full_entry = next((e for e in entries if e["id"] == entry_id), None)
                     if full_entry:
                         mention["fullContent"] = full_entry["content"]
                         mention["date"] = full_entry["createdAt"]
+            
+            topic["mentions"] = unique_mentions
         
         return threads_data
     except Exception as e:
         print(f"Error in topic analysis: {e}")
+        print(f"Error details: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {"topics": []}
 
 if __name__ == "__main__":

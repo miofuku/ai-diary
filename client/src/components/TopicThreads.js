@@ -6,11 +6,13 @@ const TopicThreads = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [expandedTopic, setExpandedTopic] = useState(null);
   const [error, setError] = useState(null);
+  const [lastUpdate, setLastUpdate] = useState(null);
 
   useEffect(() => {
     const fetchTopicThreads = async () => {
       try {
         setIsLoading(true);
+        console.log("Fetching topic threads...");
         const response = await fetch('http://localhost:3001/api/topic-threads');
         
         if (!response.ok) {
@@ -18,7 +20,9 @@ const TopicThreads = () => {
         }
         
         const data = await response.json();
+        console.log("Topic threads received:", data);
         setTopicThreads(data.topics || []);
+        setLastUpdate(new Date());
       } catch (error) {
         console.error('Failed to fetch topic threads:', error);
         setError('Could not load topic threads. Please try again later.');
@@ -38,6 +42,22 @@ const TopicThreads = () => {
     }
   };
 
+  const refreshTopics = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('http://localhost:3001/api/topic-threads');
+      if (response.ok) {
+        const data = await response.json();
+        setTopicThreads(data.topics || []);
+        setLastUpdate(new Date());
+      }
+    } catch (error) {
+      console.error('Failed to refresh topics:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (isLoading) {
     return <div className="topic-threads-container loading">Loading topic threads...</div>;
   }
@@ -48,12 +68,28 @@ const TopicThreads = () => {
 
   return (
     <div className="topic-threads-container">
-      <h2>Topic Threads</h2>
-      <p className="topic-description">Recurring themes and their progression in your diary</p>
+      <div className="topic-header-section">
+        <h2>Topic Threads</h2>
+        <button className="refresh-button" onClick={refreshTopics}>
+          Refresh Topics
+        </button>
+      </div>
+      <p className="topic-description">
+        Recurring themes and their progression in your diary
+        {lastUpdate && <span className="last-update"> · Updated: {lastUpdate.toLocaleTimeString()}</span>}
+      </p>
       
       {topicThreads.length === 0 ? (
         <div className="no-topics">
           No recurring topics found yet. Keep adding more entries to see connections.
+          <div className="tips">
+            <p>Tips:</p>
+            <ul>
+              <li>Add at least 2-3 entries to start seeing connections</li>
+              <li>Mention the same topics across different entries</li>
+              <li>Click "Refresh Topics" after adding new entries</li>
+            </ul>
+          </div>
         </div>
       ) : (
         <div className="topic-list">
