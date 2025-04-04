@@ -108,11 +108,11 @@ def optimize_text(content: str) -> str:
             messages=[
                 {
                     "role": "system", 
-                    "content": "You are a diary assistant. Correct any transcription errors and typos in the user's text without changing meaning. Fix grammar issues, improve flow, and preserve the content's emotion and style. Keep the corrections minimal."
+                    "content": "You are a diary assistant. Correct any transcription errors and typos in the user's text without changing meaning. Fix grammar issues, improve flow, and preserve the content's emotion and style. Keep the corrections minimal. IMPORTANT: ALWAYS PRESERVE THE ORIGINAL LANGUAGE - DO NOT TRANSLATE CHINESE TEXT TO ENGLISH. If the text is in Chinese, keep it in Chinese."
                 },
                 {
                     "role": "user",
-                    "content": f"Please optimize this diary entry, correcting any transcription errors while preserving its meaning: {content}"
+                    "content": f"Please optimize this diary entry, correcting any transcription errors while preserving its meaning and original language: {content}"
                 }
             ],
             temperature=0.3,
@@ -158,8 +158,8 @@ Guidelines:
 - Never add timestamps or date markers
 - Format lists as bullet points when the content resembles a list or collection of items
 - Apply consistent indentation for hierarchical lists if needed
-- Use paragraph breaks for topic changes or to improve readability
-- Aim for a natural reading experience as if written in one session"""
+- IMPORTANT: PRESERVE THE ORIGINAL LANGUAGE. If content is in Chinese, keep it in Chinese - do not translate.
+"""
                 },
                 {
                     "role": "user",
@@ -436,11 +436,13 @@ def analyze_topic_threads(entries):
                     - The diary entries are mainly in Chinese (中文)
                     - CAREFULLY look for recurring topics 
                     - Even if topics only appear in 2 entries, include them as important connections
-                    - Pay close attention to projects, tools, platforms, and activities mentioned repeatedly"""
+                    - Pay close attention to projects, tools, platforms, and activities mentioned repeatedly
+                    - CRITICAL: RESPOND IN THE SAME LANGUAGE AS THE ENTRIES - If entries are in Chinese, all topic names, summaries, progressions, and excerpts MUST BE IN CHINESE
+                    - DO NOT TRANSLATE ANYTHING TO ENGLISH - preserve the original language"""
                 },
                 {
                     "role": "user",
-                    "content": f"Here are the diary entries in chronological order. Please identify ALL recurring topics: {entries_json}"
+                    "content": f"Here are the diary entries in chronological order. Please identify ALL recurring topics and respond in the SAME LANGUAGE as the entries (mainly Chinese): {entries_json}"
                 }
             ],
             temperature=0.1,  # Lower temperature for more deterministic results
