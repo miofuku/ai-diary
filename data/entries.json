@@ -88,5 +88,47 @@
     "content": "\u7ee7\u7eed\u63a8\u8fdb\u751f\u6d3b\u6210\u672c\u9879\u76ee\u3002\nAI\u53e3\u8bed\u9879\u76ee\u8bbe\u8ba1\u6570\u636e\u5e93\u3002",
     "type": "text",
     "createdAt": "2025-04-15T22:00:00.000Z"
+  },
+  {
+    "id": 1745182814646,
+    "content": "\u786e\u5b9a AI Fintech \u7684\u6280\u672f\u6808\u3002\n\n\u7a7a\u5934\u5c3d\u804c\u8c03\u67e5\u9879\u76ee\u73b0\u5728\u53d8\u66f4\u4e3a\u65e9\u671f\u521d\u521b\u68c0\u7d22\u9879\u76ee\u3002\n\n\u505a\u83dc\u5730\u590f\u5b63\u89c4\u5212",
+    "type": "text",
+    "createdAt": "2025-04-16T22:00:00.000Z"
+  },
+  {
+    "id": 1745182921917,
+    "content": "\u7528Dify\u5236\u4f5c\u4e86\u81ea\u52a8\u751f\u6210\u65c5\u6e38\u535a\u5ba2\u6587\u7ae0\uff0c\u5e76\u8bbe\u7f6e\u4e86\u81ea\u52a8\u5c06\u4e2d\u6587\u535a\u5ba2\u7ffb\u8bd1\u6210\u82f1\u6587\u7684\u5de5\u4f5c\u6d41\u3002\n\n\u7ee7\u7eed\u8fdb\u884c\u65e9\u671f\u521d\u521b\u9879\u76ee\u7684\u6280\u672f\u6808\u8c03\u7814\u3002",
+    "type": "text",
+    "createdAt": "2025-04-17T22:00:00.000Z"
+  },
+  {
+    "id": 1745182932228,
+    "content": "\u4f11\u606f",
+    "type": "text",
+    "createdAt": "2025-04-18T22:00:00.000Z"
+  },
+  {
+    "id": 1745182936693,
+    "content": "\u4f11\u606f\u3002",
+    "type": "text",
+    "createdAt": "2025-04-04T22:00:00.000Z"
+  },
+  {
+    "id": 1745182948388,
+    "content": "\u4f11\u606f\u3002",
+    "type": "text",
+    "createdAt": "2025-04-12T22:00:00.000Z"
+  },
+  {
+    "id": 1745182952048,
+    "content": "\u4f11\u606f",
+    "type": "text",
+    "createdAt": "2025-04-13T22:00:00.000Z"
+  },
+  {
+    "id": 1745183309376,
+    "content": "\u5728\u5a46\u5bb6\u5e86\u795d\u590d\u6d3b\u8282\u3002\n\n\u6309\u7167\u83dc\u5730\u89c4\u5212\u642d\u756a\u8304\u548c\u74dc\u7c7b\u7684\u67b6\u5b50\u3002\u79fb\u683d\u7b2c\u4e00\u6279\u7389\u7c73\uff0810\u68f5\uff09\uff0c\u756a\u8304\uff086\u68f5\uff09\uff0c\u7f57\u52d2\u3002\u91c7\u6458\u751f\u83dc\uff0c\u767d\u83dc\uff0c\u4e0a\u6d77\u9752\uff0c\u5c0f\u841d\u535c\u3002",
+    "type": "text",
+    "createdAt": "2025-04-19T22:00:00.000Z"
   }
 ]
