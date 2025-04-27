@@ -296,6 +296,23 @@ function App() {
     }
   };
 
+  // 格式化日期为中文格式
+  const formatDate = (date) => {
+    if (!date) return '';
+    try {
+      // 如果是日期对象
+      if (date instanceof Date) {
+        return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+      }
+      // 如果是字符串
+      const d = new Date(date);
+      return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+    } catch (e) {
+      console.error('日期格式化错误:', e);
+      return String(date);
+    }
+  };
+
   return (
     <div className="App">
       <h1>My Diary</h1>
@@ -308,7 +325,7 @@ function App() {
             selectedDate={selectedDate}
           />
           <p className="selected-date">
-            Selected date: {selectedDate.toLocaleDateString()}
+            Selected date: {formatDate(selectedDate)}
           </p>
         </div>
 
@@ -318,7 +335,7 @@ function App() {
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder={`Write your diary for ${selectedDate.toLocaleDateString()}...`}
+                placeholder={`Write your diary for ${formatDate(selectedDate)}...`}
               />
               
               <div className="button-group">
@@ -383,7 +400,7 @@ function App() {
           )}
 
           <div className="entries">
-            <h2>Entries for {selectedDate.toLocaleDateString()}</h2>
+            <h2>Entries for {formatDate(selectedDate)}</h2>
             {filteredEntries.length > 0 ? (
               filteredEntries.map(entry => {
                 console.log('Rendering entry:', entry.id, entry.content.substring(0, 50) + '...');
@@ -410,7 +427,7 @@ function App() {
                 );
               })
             ) : (
-              <p>No entries for this date. {console.log('No entries for date:', selectedDate.toLocaleDateString())}</p>
+              <p>No entries for this date. {console.log('No entries for date:', formatDate(selectedDate))}</p>
             )}
           </div>
 

@@ -56,25 +56,14 @@
 }
 
 .diary-calendar {
+  width: 100%;
   margin-bottom: 20px;
-}
-
-.diary-date-indicator {
-  height: 6px;
-  width: 6px;
-  background-color: #ff3366;
-  border-radius: 50%;
-  display: block;
-  margin: 2px auto 0;
-  position: absolute;
-  bottom: 2px;
-  left: 50%;
-  transform: translateX(-50%);
 }
 
 .selected-date {
   font-weight: bold;
   margin: 10px 0;
+  text-align: center;
 }
 
 .input-form {
