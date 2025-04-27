@@ -5,115 +5,97 @@ import 'react-calendar/dist/Calendar.css';
 import '../styles/DiaryCalendar.css';
 
 function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
-  // 创建一个包含日记条目日期的映射
+  // 创建日期条目的映射
   const datesWithEntries = entries.reduce((acc, entry) => {
-    if (!entry || !entry.createdAt) return acc;
-    
-    try {
-      const date = new Date(entry.createdAt).toLocaleDateString();
-      acc[date] = true;
-    } catch (error) {
-      console.error('日期解析错误:', error);
+    if (entry && entry.createdAt) {
+      try {
+        const entryDate = new Date(entry.createdAt);
+        const dateKey = `${entryDate.getFullYear()}-${entryDate.getMonth() + 1}-${entryDate.getDate()}`;
+        acc[dateKey] = true;
+      } catch (error) {
+        console.error('处理日期条目时出错:', error);
+      }
     }
     return acc;
   }, {});
-  
-  // 获取农历信息
-  const getLunarInfo = (date) => {
+
+  // 获取农历日显示文本的函数
+  const getLunarDayText = (lunar) => {
+    // 检查可用的方法
+    console.log('农历对象方法:', Object.getOwnPropertyNames(lunar.__proto__));
+    
+    // 尝试不同的可能方法
+    if (typeof lunar.getDayInChinese === 'function') {
+      return lunar.getDayInChinese();
+    }
+    
+    if (typeof lunar.getDayCn === 'function') {
+      return lunar.getDayCn();
+    }
+    
+    if (typeof lunar.getDay === 'function') {
+      const day = lunar.getDay();
+      // 转换数字为中文日期
+      const chineseDays = ['初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
+                         '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
+                         '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十'];
+      return chineseDays[day - 1] || day.toString();
+    }
+    
+    // 尝试使用 toString() 方法，然后提取日期部分
+    const lunarStr = lunar.toString();
+    console.log('农历字符串:', lunarStr);
+    
+    // 如果是类似 "农历X年X月X日" 的格式，提取最后的日期部分
+    const match = lunarStr.match(/([初一二三四五六七八九十廿]{1,3})/);
+    if (match) {
+      return match[0];
+    }
+    
+    return '';
+  };
+
+  // 自定义日期内容
+  const tileContent = ({ date, view }) => {
+    if (view !== 'month') return null;
+    
+    // 获取公历日期的键
+    const dateKey = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+    const hasEntries = datesWithEntries[dateKey];
+    
+    // 获取农历信息
+    let lunarDay = '';
     try {
       const solar = SolarDay.fromYmd(
         date.getFullYear(), 
         date.getMonth() + 1, 
         date.getDate()
       );
+      
       const lunar = solar.getLunarDay();
       
       // 获取农历日
-      const lunarDay = lunar.getDayInChinese();
-      
-      // 节日信息
-      const festivals = [];
-
-      // 添加农历节日
-      lunar.getFestivals().forEach(f => {
-        festivals.push({
-          name: f.getName(),
-          isHoliday: f.isHoliday()
-        });
-      });
-
-      // 添加公历节日
-      solar.getFestivals().forEach(f => {
-        festivals.push({
-          name: f.getName(),
-          isHoliday: f.isHoliday()
-        });
-      });
-
-      // 获取节气
-      const solarTerm = solar.getSolarTerm();
-      if (solarTerm) {
-        festivals.push({
-          name: solarTerm.getName(),
-          isHoliday: false
-        });
-      }
-
-      return {
-        lunarDay,
-        festivals
-      };
+      lunarDay = getLunarDayText(lunar);
     } catch (error) {
-      console.error('获取农历信息失败:', error, date);
-      return {
-        lunarDay: '',
-        festivals: []
-      };
+      console.error('获取农历日期出错:', error, date);
     }
-  };
 
-  // 自定义日期内容渲染
-  const tileContent = ({ date, view }) => {
-    if (view !== 'month') return null;
-
-    const dateStr = date.toLocaleDateString();
-    const hasEntries = datesWithEntries[dateStr];
-    
-    // 获取农历信息
-    const { lunarDay, festivals } = getLunarInfo(date);
-    
     return (
-      <div className="custom-tile-content">
-        {hasEntries && <div className="diary-date-indicator"></div>}
-        <div className="lunar-day">{lunarDay}</div>
-        {festivals.length > 0 && (
-          <div className={`festival ${festivals.some(f => f.isHoliday) ? 'holiday' : ''}`}>
-            {festivals[0].name}
-          </div>
-        )}
+      <div className="tile-content">
+        {hasEntries && <div className="diary-entry-dot"></div>}
+        {lunarDay && <div className="lunar-day">{lunarDay}</div>}
       </div>
     );
   };
 
-  // 自定义周末显示
-  const formatShortWeekday = (locale, date) => {
-    const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
-    return weekdays[date.getDay()];
-  };
-
-  // 自定义月份显示
-  const formatMonthYear = (locale, date) => {
-    return `${date.getFullYear()}年 ${date.getMonth() + 1}月`;
-  };
-
   return (
-    <div className="diary-calendar">
-      <Calendar 
+    <div className="diary-calendar-container">
+      <Calendar
         onChange={onDateSelect}
         value={selectedDate}
         tileContent={tileContent}
-        formatShortWeekday={formatShortWeekday}
-        formatMonthYear={formatMonthYear}
+        formatShortWeekday={(locale, date) => ['日', '一', '二', '三', '四', '五', '六'][date.getDay()]}
+        formatMonthYear={(locale, date) => `${date.getFullYear()}年 ${date.getMonth() + 1}月`}
         locale="zh-CN"
       />
     </div>

@@ -1,97 +1,104 @@
-/* 农历日期样式 */
-.custom-tile-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  font-size: 10px;
-  line-height: 1.2;
-  position: relative;
-  margin-top: 3px;
-  z-index: 1;
-  position: absolute;
-  bottom: 2px;
-  left: 0;
-  right: 0;
-}
-
-.lunar-day {
-  color: #888;
-  font-size: 9px;
-}
-
-.festival {
-  color: #888;
-  font-size: 8px;
-  max-width: 30px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.festival.holiday {
-  color: #f43f5e;
-}
-
-/* 有日记的日期指示器 */
-.diary-date-indicator {
-  height: 5px;
-  width: 5px;
-  background-color: #ff3366;
-  border-radius: 50%;
-  display: block;
+/* 日历容器样式 */
+.diary-calendar-container {
+  width: 100%;
   margin: 0 auto;
 }
 
-/* 自定义日历样式 */
-.react-calendar {
-  width: 350px;
-  max-width: 100%;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  overflow: hidden;
-  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
-}
-
+/* 日期样式 */
 .react-calendar__tile {
   position: relative;
-  height: 48px;
+  height: 45px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: center;
   align-items: center;
-  padding-top: 5px;
+  padding: 8px 0 !important;
 }
 
-.react-calendar__month-view__weekdays__weekday {
-  color: #666;
+/* 日期内容布局 */
+.tile-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
 }
 
-.react-calendar__month-view__weekdays__weekday:nth-child(1),
-.react-calendar__month-view__weekdays__weekday:nth-child(7) {
-  color: #f43f5e;
+/* 日记条目指示点 - 修正位置 */
+.diary-entry-dot {
+  width: 4px;
+  height: 4px;
+  background-color: #ff3366;
+  border-radius: 50%;
+  position: absolute;
+  top: 0;
+  right: 10%;
 }
 
+/* 农历日期样式 */
+.lunar-day {
+  font-size: 9px;
+  color: #888;
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  text-align: center;
+}
+
+/* 周末颜色 */
 .react-calendar__month-view__days__day--weekend {
-  color: #f43f5e;
+  color: #ff3366;
 }
 
+/* 星期样式 */
+.react-calendar__month-view__weekdays__weekday {
+  text-align: center;
+  text-transform: none;
+  font-weight: bold;
+  font-size: 0.9em;
+  padding: 5px 0;
+}
+
+.react-calendar__month-view__weekdays__weekday abbr {
+  text-decoration: none;
+  border: none;
+}
+
+/* 周末星期样式 */
+.react-calendar__month-view__weekdays__weekday:first-child,
+.react-calendar__month-view__weekdays__weekday:last-child {
+  color: #ff3366;
+}
+
+/* 选中日期样式 */
 .react-calendar__tile--active {
   background: #1677ff;
   color: white;
 }
 
-.react-calendar__tile--active .lunar-day,
-.react-calendar__tile--active .festival:not(.holiday) {
-  color: rgba(255, 255, 255, 0.85);
+.react-calendar__tile--active .lunar-day {
+  color: rgba(255, 255, 255, 0.8);
 }
 
-/* 确保日期数字和农历信息垂直排列 */
-.react-calendar__tile abbr {
-  display: block;
-  margin-bottom: 3px;
+/* 今天日期样式 */
+.react-calendar__tile--now {
+  background-color: #f0f7ff;
 }
 
-/* 确保农历信息在日期下方可见 */
-.react-calendar__month-view__days__day {
-  padding-bottom: 15px !important;
+/* 选中日期样式 */
+.selected-date {
+  margin-top: 10px;
+  text-align: center;
+  font-weight: bold;
+}
+
+/* 农历测试结果 */
+.lunar-test {
+  background-color: #f5f5f5;
+  padding: 5px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  font-family: monospace;
 } 

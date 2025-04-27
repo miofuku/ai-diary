@@ -299,18 +299,7 @@ function App() {
   // 格式化日期为中文格式
   const formatDate = (date) => {
     if (!date) return '';
-    try {
-      // 如果是日期对象
-      if (date instanceof Date) {
-        return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
-      }
-      // 如果是字符串
-      const d = new Date(date);
-      return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
-    } catch (e) {
-      console.error('日期格式化错误:', e);
-      return String(date);
-    }
+    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
   };
 
   return (
@@ -325,7 +314,7 @@ function App() {
             selectedDate={selectedDate}
           />
           <p className="selected-date">
-            Selected date: {formatDate(selectedDate)}
+            选中日期: {formatDate(selectedDate)}
           </p>
         </div>
 
