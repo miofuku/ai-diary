@@ -178,7 +178,7 @@
 
 /* Today (current day) styling */
 .today-tile {
-  background-color: transparent !important;
+  background-color: #4285f4 !important; /* 深蓝色 */
 }
 
 .today-tile .solar-day,
@@ -188,7 +188,7 @@
 
 /* Selected day styling (different from today) */
 .selected-tile {
-  background-color: transparent !important;
+  background-color: #79a9f7 !important; /* 浅蓝色 */
 }
 
 .selected-tile .solar-day,
@@ -197,9 +197,12 @@
 }
 
 /* Override react-calendar default styles */
-.react-calendar__tile--now:not(.react-calendar__tile--active),
+.react-calendar__tile--now:not(.react-calendar__tile--active) {
+  background-color: #4285f4 !important; /* 今天 - 深蓝色 */
+}
+
 .react-calendar__tile--active:not(.react-calendar__tile--now) {
-  background-color: transparent !important;
+  background-color: #79a9f7 !important; /* 选中的日期（非今天）- 浅蓝色 */
 }
 
 /* Weekend dates within current month */
