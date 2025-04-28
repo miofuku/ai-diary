@@ -313,9 +313,6 @@ function App() {
             onDateSelect={handleDateSelect} 
             selectedDate={selectedDate}
           />
-          <p className="selected-date">
-            选中日期: {formatDate(selectedDate)}
-          </p>
         </div>
 
         <div className="content-container">

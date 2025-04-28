@@ -74,24 +74,68 @@
 
 /* 选中日期样式 */
 .react-calendar__tile--active {
-  background: #1677ff;
-  color: white;
+  background: #1677ff !important;
+  color: white !important;
 }
 
 .react-calendar__tile--active .lunar-day {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.8) !important;
 }
 
-/* 今天日期样式 */
+/* 今天日期样式 - 增强可见性 */
 .react-calendar__tile--now {
-  background-color: #f0f7ff;
+  background-color: #e6f7ff !important;
+  border: 2px solid #1890ff !important;
+  font-weight: bold !important;
+  z-index: 1;
 }
 
-/* 选中日期样式 */
+.react-calendar__tile--now:not(.react-calendar__tile--active) {
+  color: #1890ff !important;
+}
+
+.react-calendar__tile--now .lunar-day {
+  color: #1890ff !important;
+  font-weight: normal;
+}
+
+.react-calendar__tile--now.react-calendar__tile--active {
+  background-color: #1677ff !important;
+  border-color: #1677ff !important;
+}
+
+.react-calendar__tile--now.react-calendar__tile--active .lunar-day {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* 选中日期显示样式 */
 .selected-date {
   margin-top: 10px;
   text-align: center;
   font-weight: bold;
+  color: #333;
+}
+
+/* 悬停样式 */
+.react-calendar__tile:hover {
+  background-color: #f0f0f0;
+}
+
+/* 确保字体大小和间距适当 */
+.react-calendar {
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-size: 14px;
+  width: 100%;
+  max-width: 100%;
+  padding: 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+}
+
+/* 确保日期数字的位置 */
+.react-calendar__tile abbr {
+  position: relative;
+  top: -2px;
 }
 
 /* 农历测试结果 */

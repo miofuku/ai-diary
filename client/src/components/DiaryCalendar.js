@@ -21,38 +21,19 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
 
   // 获取农历日显示文本的函数
   const getLunarDayText = (lunar) => {
-    // 检查可用的方法
-    console.log('农历对象方法:', Object.getOwnPropertyNames(lunar.__proto__));
-    
-    // 尝试不同的可能方法
-    if (typeof lunar.getDayInChinese === 'function') {
-      return lunar.getDayInChinese();
-    }
-    
-    if (typeof lunar.getDayCn === 'function') {
-      return lunar.getDayCn();
-    }
-    
-    if (typeof lunar.getDay === 'function') {
+    try {
+      // 使用 getDay 方法获取农历日数值
       const day = lunar.getDay();
+      
       // 转换数字为中文日期
       const chineseDays = ['初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
                          '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
                          '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十'];
       return chineseDays[day - 1] || day.toString();
+    } catch (error) {
+      console.error('获取农历日显示文本失败:', error);
+      return '';
     }
-    
-    // 尝试使用 toString() 方法，然后提取日期部分
-    const lunarStr = lunar.toString();
-    console.log('农历字符串:', lunarStr);
-    
-    // 如果是类似 "农历X年X月X日" 的格式，提取最后的日期部分
-    const match = lunarStr.match(/([初一二三四五六七八九十廿]{1,3})/);
-    if (match) {
-      return match[0];
-    }
-    
-    return '';
   };
 
   // 自定义日期内容
@@ -73,9 +54,13 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
       );
       
       const lunar = solar.getLunarDay();
-      
-      // 获取农历日
       lunarDay = getLunarDayText(lunar);
+      
+      // 检查是否有节日
+      const festival = lunar.getFestival();
+      if (festival) {
+        console.log(`${date.toLocaleDateString()} 的节日:`, festival.getName());
+      }
     } catch (error) {
       console.error('获取农历日期出错:', error, date);
     }
@@ -98,6 +83,9 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
         formatMonthYear={(locale, date) => `${date.getFullYear()}年 ${date.getMonth() + 1}月`}
         locale="zh-CN"
       />
+      <p className="selected-date">
+        Selected Date: {selectedDate ? `${selectedDate.getFullYear()}年${selectedDate.getMonth() + 1}月${selectedDate.getDate()}日` : ''}
+      </p>
     </div>
   );
 }
