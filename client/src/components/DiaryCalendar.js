@@ -19,20 +19,37 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
     return acc;
   }, {});
 
-  // 获取农历日显示文本的函数
-  const getLunarDayText = (lunar) => {
+  // 获取农历日期文本
+  const getLunarDayText = (date) => {
     try {
-      // 使用 getDay 方法获取农历日数值
-      const day = lunar.getDay();
+      // 创建公历对象
+      const solar = SolarDay.fromYmd(
+        date.getFullYear(),
+        date.getMonth() + 1,
+        date.getDate()
+      );
       
-      // 转换数字为中文日期
-      const chineseDays = ['初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
-                         '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
-                         '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十'];
-      return chineseDays[day - 1] || day.toString();
+      // 获取农历对象
+      const lunar = solar.getLunarDay();
+      
+      // 获取农历日期（如 "初一"）
+      const day = lunar.getDay();
+      const chineseDayNames = [
+        "初一", "初二", "初三", "初四", "初五", "初六", "初七", "初八", "初九", "初十",
+        "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十",
+        "廿一", "廿二", "廿三", "廿四", "廿五", "廿六", "廿七", "廿八", "廿九", "三十"
+      ];
+      const lunarDayName = chineseDayNames[day - 1];
+      
+      const lunarMonthName = lunar.getLunarMonth().getName();
+      
+      // 根据图片中的样式，显示类似 "初四庚子" 的文本
+      const gzDay = lunar.getSixtyCycle(); // 获取干支日
+      
+      return `${lunarDayName}${gzDay}`;
     } catch (error) {
-      console.error('获取农历日显示文本失败:', error);
-      return '';
+      console.error('获取农历信息失败:', error, date);
+      return "";
     }
   };
 
@@ -45,30 +62,19 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
     const hasEntries = datesWithEntries[dateKey];
     
     // 获取农历信息
-    let lunarDay = '';
-    try {
-      const solar = SolarDay.fromYmd(
-        date.getFullYear(), 
-        date.getMonth() + 1, 
-        date.getDate()
-      );
-      
-      const lunar = solar.getLunarDay();
-      lunarDay = getLunarDayText(lunar);
-      
-      // 检查是否有节日
-      const festival = lunar.getFestival();
-      if (festival) {
-        console.log(`${date.toLocaleDateString()} 的节日:`, festival.getName());
-      }
-    } catch (error) {
-      console.error('获取农历日期出错:', error, date);
-    }
-
+    const lunarText = getLunarDayText(date);
+    
+    // 判断是否属于当前月份
+    const isCurrentMonth = date.getMonth() === selectedDate.getMonth();
+    
+    // 判断是否是周末
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+    
     return (
-      <div className="tile-content">
+      <div className={`tile-content ${isCurrentMonth ? 'current-month' : 'other-month'} ${isWeekend ? 'weekend' : ''}`}>
+        <div className="solar-day">{date.getDate()}</div>
+        <div className="lunar-info">{lunarText}</div>
         {hasEntries && <div className="diary-entry-dot"></div>}
-        {lunarDay && <div className="lunar-day">{lunarDay}</div>}
       </div>
     );
   };
@@ -82,10 +88,11 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
         formatShortWeekday={(locale, date) => ['日', '一', '二', '三', '四', '五', '六'][date.getDay()]}
         formatMonthYear={(locale, date) => `${date.getFullYear()}年 ${date.getMonth() + 1}月`}
         locale="zh-CN"
+        showNeighboringMonth={true}
       />
-      <p className="selected-date">
-        Selected Date: {selectedDate ? `${selectedDate.getFullYear()}年${selectedDate.getMonth() + 1}月${selectedDate.getDate()}日` : ''}
-      </p>
+      <div className="selected-date-info">
+        选中日期: {selectedDate ? `${selectedDate.getFullYear()}年${selectedDate.getMonth() + 1}月${selectedDate.getDate()}日` : ''}
+      </div>
     </div>
   );
 }
