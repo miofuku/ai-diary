@@ -77,10 +77,22 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
     );
   };
 
-  // 覆盖默认的日期显示，使其为空（因为我们在tileContent中已经显示了日期）
+  // Add a custom className function to identify the current day
   const tileClassName = ({ date, view }) => {
     if (view === 'month') {
-      return 'custom-tile';
+      const classes = ['custom-tile'];
+      
+      // Check if it's today
+      const today = new Date();
+      if (
+        date.getDate() === today.getDate() &&
+        date.getMonth() === today.getMonth() &&
+        date.getFullYear() === today.getFullYear()
+      ) {
+        classes.push('today-tile');
+      }
+      
+      return classes.join(' ');
     }
     return null;
   };
@@ -98,7 +110,7 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
         showNeighboringMonth={true}
       />
       <div className="selected-date-info">
-        选中日期: {selectedDate ? `${selectedDate.getFullYear()}年${selectedDate.getMonth() + 1}月${selectedDate.getDate()}日` : ''}
+        Selected Date: {selectedDate ? `${selectedDate.getFullYear()}年${selectedDate.getMonth() + 1}月${selectedDate.getDate()}日` : ''}
       </div>
     </div>
   );

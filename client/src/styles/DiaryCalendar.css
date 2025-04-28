@@ -63,6 +63,8 @@
   flex-direction: column;
   justify-content: flex-start;
   align-items: center;
+  font-size: inherit !important;
+  font-weight: normal !important;
 }
 
 /* 自定义单元格 - 隐藏原始日期数字 */
@@ -167,47 +169,53 @@
   color: #ff9800;
 }
 
-/* 今天日期样式 - 增强可见性 */
+/* Today (current day) styling - keep size consistent with other dates */
+.today-tile {
+  background-color: #4285f4 !important;
+}
+
+.today-tile .solar-day,
+.today-tile .lunar-info {
+  color: white !important;
+  /* No font-size override to keep it consistent with other dates */
+}
+
+/* Override the default react-calendar today styling */
 .react-calendar__tile--now {
-  background-color: #e6f7ff !important;
-  border: 2px solid #1890ff !important;
-  font-weight: bold !important;
-  z-index: 1;
+  background: inherit;
+  font-size: inherit !important;
+  font-weight: normal !important;
 }
 
 .react-calendar__tile--now:not(.react-calendar__tile--active) {
-  color: #1890ff !important;
+  background-color: #4285f4;
 }
 
-.react-calendar__tile--now .lunar-info {
-  color: #1890ff !important;
+.react-calendar__tile--now abbr {
+  font-weight: normal !important;
+  font-size: inherit !important;
+}
+
+/* Ensure all date cells have consistent sizing */
+.react-calendar__tile {
+  height: 66px;
+  padding: 2px !important;
+  background: none;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  font-size: inherit !important;
+  font-weight: normal !important;
+}
+
+/* Ensure consistent font size for all dates */
+.solar-day {
+  font-size: 16px;
   font-weight: normal;
-}
-
-.react-calendar__tile--now.react-calendar__tile--active {
-  background-color: #1677ff !important;
-  border-color: #1677ff !important;
-}
-
-.react-calendar__tile--now.react-calendar__tile--active .lunar-info {
-  color: rgba(255, 255, 255, 0.9) !important;
-}
-
-/* 确保字体大小和间距适当 */
-.react-calendar {
-  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
-  font-size: 14px;
-  width: 100%;
-  max-width: 100%;
-  padding: 8px;
-  border: 1px solid #d9d9d9;
-  border-radius: 8px;
-}
-
-/* 确保日期数字的位置 */
-.react-calendar__tile abbr {
-  position: relative;
-  top: -2px;
+  margin-bottom: 4px;
+  text-align: center;
 }
 
 /* 农历测试结果 */
