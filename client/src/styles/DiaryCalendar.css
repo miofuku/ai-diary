@@ -176,31 +176,40 @@
   color: #ff9800;
 }
 
-/* Today (current day) styling - keep size consistent with other dates */
+/* Today (current day) styling */
 .today-tile {
-  background-color: #4285f4 !important;
+  background-color: transparent !important;
 }
 
 .today-tile .solar-day,
 .today-tile .lunar-info {
   color: white !important;
-  /* No font-size override to keep it consistent with other dates */
 }
 
-/* Override the default react-calendar today styling */
-.react-calendar__tile--now {
-  background: inherit;
-  font-size: inherit !important;
-  font-weight: normal !important;
+/* Selected day styling (different from today) */
+.selected-tile {
+  background-color: transparent !important;
 }
 
-.react-calendar__tile--now:not(.react-calendar__tile--active) {
-  background-color: #4285f4;
+.selected-tile .solar-day,
+.selected-tile .lunar-info {
+  color: white !important;
 }
 
-.react-calendar__tile--now abbr {
-  font-weight: normal !important;
-  font-size: inherit !important;
+/* Override react-calendar default styles */
+.react-calendar__tile--now:not(.react-calendar__tile--active),
+.react-calendar__tile--active:not(.react-calendar__tile--now) {
+  background-color: transparent !important;
+}
+
+/* Weekend dates within current month */
+.react-calendar__month-view__days__day--weekend:not(.react-calendar__month-view__days__day--neighboringMonth) .solar-day {
+  color: #ff3366 !important; /* 当前月份周末 - 红色 */
+}
+
+/* Weekend dates in neighboring months */
+.react-calendar__month-view__days__day--weekend.react-calendar__month-view__days__day--neighboringMonth .solar-day {
+  color: #ffb3c3 !important; /* 非当前月份周末 - 浅红色 */
 }
 
 /* Ensure all date cells have consistent sizing */

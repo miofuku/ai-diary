@@ -76,10 +76,58 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
     // 判断是否属于当前月份
     const isCurrentMonth = date.getMonth() === selectedDate.getMonth();
     
-    // 判断是否是周末
+    // 判断是否是周末 (周六或周日)
     const isWeekend = date.getDay() === 0 || date.getDay() === 6;
     
-    // 重要：确保渲染农历日期，即使获取失败也显示空字符串而不是null
+    // 判断是否是今天
+    const today = new Date();
+    const isToday = 
+      date.getDate() === today.getDate() &&
+      date.getMonth() === today.getMonth() &&
+      date.getFullYear() === today.getFullYear();
+    
+    // 判断是否是选中的日期
+    const isSelected = 
+      date.getDate() === selectedDate.getDate() &&
+      date.getMonth() === selectedDate.getMonth() &&
+      date.getFullYear() === selectedDate.getFullYear();
+    
+    // 决定日期显示的颜色
+    // 优先级：1. 今天 2. 当前月份的周末 3. 当前月份的工作日 4. 非当前月份
+    let dateColor = '#000'; // 默认黑色
+    
+    if (!isCurrentMonth) {
+      // 非当前月份 - 浅灰色
+      dateColor = '#cccccc';
+    } else if (isWeekend) {
+      // 当前月份的周末 - 红色
+      dateColor = '#ff3366';
+    }
+    
+    // 只有今天文字为白色，选中日期保持黑色
+    if (isToday) {
+      dateColor = '#fff';
+    }
+    
+    // 背景颜色和样式
+    let bgColor = 'transparent';
+    let padding = '3px 0';
+    let borderRadius = '4px';
+    let width = '100%';
+    let height = '100%';
+    
+    if (isToday) {
+      // 今天 - 深蓝色，较小背景
+      bgColor = '#4285f4';
+      width = '95%';
+      height = '95%';
+    } else if (isSelected) {
+      // 选中的日期 - 非常浅蓝色，较小背景
+      bgColor = '#e8f0fe';
+      width = '95%';
+      height = '95%';
+    }
+    
     return (
       <div className="tile-content-wrapper" style={{
         width: '100%', 
@@ -88,27 +136,55 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
         flexDirection: 'column', 
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '3px 0'
+        position: 'relative'
       }}>
-        <div className="solar-day" style={{
-          fontSize: '16px', 
-          marginBottom: '2px',
-          color: isWeekend ? '#ff3366' : isCurrentMonth ? 'inherit' : '#cccccc'
-        }}>{date.getDate()}</div>
-        <div className="lunar-info" style={{
-          fontSize: '11px', 
-          color: isCurrentMonth ? '#666' : '#cccccc', 
-          minHeight: '16px'
-        }}>{lunarText || ""}</div>
-        {hasEntries && <div className="diary-entry-dot" style={{
-          position: 'absolute', 
-          top: '5px', 
-          right: '5px', 
-          width: '4px', 
-          height: '4px', 
-          backgroundColor: '#ff3366', 
-          borderRadius: '50%'
-        }}></div>}
+        <div style={{
+          width: width,
+          height: height,
+          backgroundColor: bgColor,
+          borderRadius: borderRadius,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: padding
+        }}>
+          {isToday && (
+            <div style={{
+              position: 'absolute',
+              top: '2px',
+              right: '2px',
+              fontSize: '10px',
+              color: '#fff',
+              fontWeight: 'bold',
+              width: '14px',
+              height: '14px',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              borderRadius: '2px'
+            }}>今</div>
+          )}
+          <div className="solar-day" style={{
+            fontSize: '16px', 
+            marginBottom: '2px',
+            color: dateColor,
+          }}>{date.getDate()}</div>
+          <div className="lunar-info" style={{
+            fontSize: '11px', 
+            color: isToday ? '#fff' : (isCurrentMonth ? '#666' : '#cccccc'), 
+            minHeight: '16px'
+          }}>{lunarText || ""}</div>
+          {hasEntries && <div className="diary-entry-dot" style={{
+            position: 'absolute', 
+            top: isToday ? '18px' : '5px', // 如果是今天，点的位置要往下移
+            right: '5px', 
+            width: '4px', 
+            height: '4px', 
+            backgroundColor: isToday ? '#fff' : '#ff3366', 
+            borderRadius: '50%'
+          }}></div>}
+        </div>
       </div>
     );
   };
@@ -116,19 +192,7 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
   // 覆盖默认的日期显示
   const tileClassName = ({ date, view }) => {
     if (view === 'month') {
-      const classes = ['custom-tile'];
-      
-      // 检查是否是今天
-      const today = new Date();
-      if (
-        date.getDate() === today.getDate() &&
-        date.getMonth() === today.getMonth() &&
-        date.getFullYear() === today.getFullYear()
-      ) {
-        classes.push('today-tile');
-      }
-      
-      return classes.join(' ');
+      return 'custom-tile';
     }
     return null;
   };
