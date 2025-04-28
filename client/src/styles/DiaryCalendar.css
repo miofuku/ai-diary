@@ -55,21 +55,17 @@
 
 /* 日期单元格样式 */
 .react-calendar__tile {
-  height: 66px;
-  padding: 2px !important;
-  background: none;
-  text-align: center;
+  padding: 0 !important;
+  height: 64px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
   align-items: center;
-  font-size: inherit !important;
-  font-weight: normal !important;
+  justify-content: center;
 }
 
 /* 自定义单元格 - 隐藏原始日期数字 */
 .custom-tile abbr {
-  display: none;
+  display: none !important;
 }
 
 /* 日期内容容器 */
@@ -81,6 +77,7 @@
   align-items: center;
   padding: 2px 0;
   position: relative;
+  box-sizing: border-box;
 }
 
 /* 公历日期样式 */
@@ -89,13 +86,23 @@
   font-weight: normal;
   margin-bottom: 4px;
   text-align: center;
+  display: block;
 }
 
 /* 农历信息样式 */
 .lunar-info {
-  font-size: 10px;
+  font-size: 12px;
   color: #666;
   text-align: center;
+  min-height: 16px;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  line-height: 1;
+  margin-top: 3px;
+  pointer-events: auto;
+  z-index: 10;
+  position: relative;
 }
 
 /* 日记条目指示点 */
@@ -225,4 +232,121 @@
   border-radius: 4px;
   margin-bottom: 10px;
   font-family: monospace;
+}
+
+/* 黄历详情容器 */
+.day-detail-container {
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  margin-top: 20px;
+  text-align: left;
+}
+
+.day-detail-header {
+  text-align: center;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.solar-date {
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 5px;
+}
+
+.lunar-date-main {
+  font-size: 24px;
+  color: #e53935;
+  font-weight: bold;
+  margin: 10px 0;
+}
+
+/* 黄历结果 */
+.day-almanac-result {
+  text-align: center;
+  margin: 15px 0;
+}
+
+.almanac-title {
+  font-size: 18px;
+  color: #e53935;
+  font-weight: bold;
+}
+
+/* 宜忌样式 */
+.day-yi-ji {
+  display: flex;
+  margin: 20px 0;
+}
+
+.yi-section, .ji-section {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+}
+
+.yi-icon, .ji-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-weight: bold;
+  margin-right: 10px;
+  font-size: 20px;
+}
+
+.yi-icon {
+  background-color: #4CAF50;
+}
+
+.ji-icon {
+  background-color: #F44336;
+}
+
+.yi-content, .ji-content {
+  flex: 1;
+  line-height: 1.6;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+}
+
+.no-yiji {
+  text-align: center;
+  color: #999;
+  margin: 20px 0;
+}
+
+.calendar-hint {
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
+}
+
+.day-detail-loading {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+}
+
+/* More specific selector for lunar info */
+.diary-calendar-container .react-calendar__tile .tile-content .lunar-info {
+  font-size: 12px;
+  color: #666;
+  text-align: center;
+  min-height: 16px;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  line-height: 1;
+  margin-top: 3px;
 } 

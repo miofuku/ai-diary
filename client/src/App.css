@@ -47,12 +47,12 @@
 }
 
 .calendar-container {
-  flex: 1;
-  max-width: 350px;
+  flex: 1.5;
+  max-width: 450px;
 }
 
 .content-container {
-  flex: 2;
+  flex: 1.5;
 }
 
 .diary-calendar {
@@ -197,8 +197,21 @@ button:hover {
 
 /* Today's date styling */
 .react-calendar__tile--now {
-  background: #ffff76;
-  color: #333;
+  background: #4285f4;
+  color: white;
+  font-size: inherit !important;
+  font-weight: normal !important;
+}
+
+.react-calendar__tile--now abbr {
+  font-weight: normal !important;
+  font-size: inherit !important;
+}
+
+/* Ensure all date cells have consistent sizing */
+.react-calendar__tile {
+  font-size: inherit !important;
+  font-weight: normal !important;
 }
 
 /* Add to App.css for recording visuals */
@@ -433,4 +446,132 @@ button:hover {
   bottom: 10px;
   right: 10px;
   z-index: 10;
+}
+
+/* Add styles for the DayDetail component */
+.day-detail-container {
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  margin-top: 20px;
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  text-align: left;
+}
+
+.day-detail-header {
+  text-align: center;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.solar-date {
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 5px;
+}
+
+.lunar-date-main {
+  font-size: 24px;
+  color: #e53935;
+  font-weight: bold;
+  margin: 10px 0;
+}
+
+.lunar-ganzhi {
+  font-size: 14px;
+  color: #666;
+}
+
+.day-yi-ji {
+  display: flex;
+  margin-bottom: 20px;
+}
+
+.yi-section, .ji-section {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+}
+
+.yi-icon, .ji-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-weight: bold;
+  margin-right: 10px;
+}
+
+.yi-icon {
+  background-color: #4CAF50;
+}
+
+.ji-icon {
+  background-color: #F44336;
+}
+
+.yi-content, .ji-content {
+  flex: 1;
+  line-height: 1.6;
+}
+
+.almanac-details {
+  margin-bottom: 20px;
+}
+
+.almanac-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.almanac-table td {
+  border: 1px solid #eee;
+  padding: 8px;
+  text-align: center;
+}
+
+.section-title {
+  font-weight: bold;
+  background-color: #f5f5f5;
+}
+
+.nayin-content {
+  font-weight: bold;
+}
+
+.spirits-container {
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.good-spirits, .wealth-direction, .twenty-eight-stars {
+  flex: 1;
+  min-width: 30%;
+  border: 1px solid #eee;
+  margin: 5px;
+  padding: 10px;
+}
+
+.fetus-direction, .chong-sha {
+  border: 1px solid #eee;
+  margin: 5px;
+  padding: 10px;
+  margin-bottom: 20px;
+}
+
+.day-detail-loading {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+}
+
+.hour-info {
+  font-weight: bold;
 }
