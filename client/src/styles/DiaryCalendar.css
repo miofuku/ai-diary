@@ -65,6 +65,11 @@
   align-items: center;
 }
 
+/* 自定义单元格 - 隐藏原始日期数字 */
+.custom-tile abbr {
+  display: none;
+}
+
 /* 日期内容容器 */
 .tile-content {
   width: 100%;
@@ -81,6 +86,7 @@
   font-size: 16px;
   font-weight: normal;
   margin-bottom: 4px;
+  text-align: center;
 }
 
 /* 农历信息样式 */

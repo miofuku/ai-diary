@@ -41,10 +41,8 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
       ];
       const lunarDayName = chineseDayNames[day - 1];
       
-      const lunarMonthName = lunar.getLunarMonth().getName();
-      
-      // 根据图片中的样式，显示类似 "初四庚子" 的文本
-      const gzDay = lunar.getSixtyCycle(); // 获取干支日
+      // 获取干支日
+      const gzDay = lunar.getSixtyCycle();
       
       return `${lunarDayName}${gzDay}`;
     } catch (error) {
@@ -79,12 +77,21 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
     );
   };
 
+  // 覆盖默认的日期显示，使其为空（因为我们在tileContent中已经显示了日期）
+  const tileClassName = ({ date, view }) => {
+    if (view === 'month') {
+      return 'custom-tile';
+    }
+    return null;
+  };
+
   return (
     <div className="diary-calendar-container">
       <Calendar
         onChange={onDateSelect}
         value={selectedDate}
         tileContent={tileContent}
+        tileClassName={tileClassName}
         formatShortWeekday={(locale, date) => ['日', '一', '二', '三', '四', '五', '六'][date.getDay()]}
         formatMonthYear={(locale, date) => `${date.getFullYear()}年 ${date.getMonth() + 1}月`}
         locale="zh-CN"
