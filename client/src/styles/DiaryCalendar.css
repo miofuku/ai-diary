@@ -1,11 +1,11 @@
-/* 日历容器样式 */
+/* Calendar Container */
 .diary-calendar-container {
   width: 100%;
   margin: 0 auto;
   font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
 }
 
-/* 日历主体样式 */
+/* Calendar Body */
 .react-calendar {
   width: 100%;
   max-width: 100%;
@@ -16,7 +16,7 @@
   padding: 8px;
 }
 
-/* 日历导航样式 */
+/* Calendar Navigation */
 .react-calendar__navigation {
   display: flex;
   height: 40px;
@@ -30,7 +30,7 @@
   font-size: 16px;
 }
 
-/* 星期标题样式 */
+/* Week Title Style */
 .react-calendar__month-view__weekdays {
   text-align: center;
   font-weight: normal;
@@ -47,13 +47,13 @@
   border: none;
 }
 
-/* 周末颜色 */
+/* Weekend Color */
 .react-calendar__month-view__weekdays__weekday:first-child abbr,
 .react-calendar__month-view__weekdays__weekday:last-child abbr {
   color: #ff3366;
 }
 
-/* 日期单元格样式 */
+/* Date Cell Style */
 .react-calendar__tile {
   padding: 0 !important;
   height: 64px;
@@ -63,12 +63,12 @@
   justify-content: center;
 }
 
-/* 自定义单元格 - 隐藏原始日期数字 */
+/* Custom Cell - Hide Original Date Number */
 .custom-tile abbr {
   display: none !important;
 }
 
-/* 日期内容容器 */
+/* Date Content Container */
 .tile-content {
   width: 100%;
   height: 100%;
@@ -80,7 +80,7 @@
   box-sizing: border-box;
 }
 
-/* 公历日期样式 */
+/* Solar Date Style */
 .solar-day {
   font-size: 16px;
   font-weight: normal;
@@ -89,7 +89,7 @@
   display: block;
 }
 
-/* 农历信息样式 */
+/* Lunar Info Style */
 .lunar-info {
   font-size: 12px;
   color: #666;
@@ -105,7 +105,7 @@
   position: relative;
 }
 
-/* 日记条目指示点 */
+/* Diary Entry Dot */
 .diary-entry-dot {
   width: 4px;
   height: 4px;
@@ -116,12 +116,12 @@
   right: 5px;
 }
 
-/* 周末样式 */
+/* Weekend Style */
 .weekend .solar-day {
   color: #ff3366;
 }
 
-/* 非当前月份的日期样式 */
+/* Other Month Date Style */
 .other-month .solar-day,
 .other-month .lunar-info {
   color: #cccccc;
@@ -131,7 +131,7 @@
   background-color: #dddddd;
 }
 
-/* 选中日期样式 */
+/* Selected Date Style */
 .react-calendar__tile--active {
   background-color: #4285f4 !important;
 }
@@ -145,7 +145,7 @@
   background-color: white;
 }
 
-/* 选中日期信息显示 */
+/* Selected Date Info Display */
 .selected-date-info {
   margin-top: 15px;
   text-align: center;
@@ -155,12 +155,12 @@
   border-radius: 4px;
 }
 
-/* 今天日期样式 */
+/* Today Date Style */
 .react-calendar__tile--now:not(.react-calendar__tile--active) {
   background-color: #e8f5e9;
 }
 
-/* 节假日和节气样式 */
+/* Holiday and Solar Term Style */
 .holiday .solar-day {
   color: #ff3366;
 }
@@ -178,17 +178,12 @@
 
 /* Today (current day) styling */
 .today-tile {
-  background-color: #4285f4 !important; /* 深蓝色 */
+  background-color: #4285f4 !important; /* Today - Deep Blue */
 }
 
 .today-tile .solar-day,
 .today-tile .lunar-info {
   color: white !important;
-}
-
-/* Selected day styling (different from today) */
-.selected-tile {
-  background-color: #79a9f7 !important; /* 浅蓝色 */
 }
 
 .selected-tile .solar-day,
@@ -198,21 +193,21 @@
 
 /* Override react-calendar default styles */
 .react-calendar__tile--now:not(.react-calendar__tile--active) {
-  background-color: #4285f4 !important; /* 今天 - 深蓝色 */
+  background-color: #4285f4 !important; /* Today - Deep Blue */
 }
 
 .react-calendar__tile--active:not(.react-calendar__tile--now) {
-  background-color: #79a9f7 !important; /* 选中的日期（非今天）- 浅蓝色 */
+  background-color: #b7d0f8 !important; /* Selected day - Light Blue */
 }
 
 /* Weekend dates within current month */
 .react-calendar__month-view__days__day--weekend:not(.react-calendar__month-view__days__day--neighboringMonth) .solar-day {
-  color: #ff3366 !important; /* 当前月份周末 - 红色 */
+  color: #ff3366 !important; /* Weekend in current month - Red */
 }
 
 /* Weekend dates in neighboring months */
 .react-calendar__month-view__days__day--weekend.react-calendar__month-view__days__day--neighboringMonth .solar-day {
-  color: #ffb3c3 !important; /* 非当前月份周末 - 浅红色 */
+  color: #fdb4c3 !important; /* Weekend in neighboring months - Light Red */
 }
 
 /* Ensure all date cells have consistent sizing */
@@ -237,7 +232,7 @@
   text-align: center;
 }
 
-/* 农历测试结果 */
+/* Lunar Test Result */
 .lunar-test {
   background-color: #f5f5f5;
   padding: 5px;
@@ -246,7 +241,7 @@
   font-family: monospace;
 }
 
-/* 黄历详情容器 */
+/* Almanac Detail Container */
 .day-detail-container {
   background-color: #fff;
   border-radius: 8px;
@@ -283,7 +278,7 @@
   margin-bottom: 10px;
 }
 
-/* 黄历结果 */
+/* Almanac Result */
 .day-almanac-result {
   text-align: center;
   margin: 15px 0;
@@ -295,7 +290,7 @@
   font-weight: bold;
 }
 
-/* 宜忌样式 */
+/* Yi and Ji Style */
 .day-yi-ji {
   display: flex;
   flex-direction: column;
