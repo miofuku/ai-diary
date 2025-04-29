@@ -92,76 +92,19 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
       date.getMonth() === selectedDate.getMonth() &&
       date.getFullYear() === selectedDate.getFullYear();
     
-    // 决定日期显示的颜色
-    // 优先级：1. 当前选中的日期 2. 今天 3. 当前月份的周末 4. 当前月份的工作日 5. 非当前月份
-    let dateColor = '#000'; // 默认黑色
-    
-    if (!isCurrentMonth) {
-      // 非当前月份 - 浅灰色
-      dateColor = '#cccccc';
-    } else if (isWeekend) {
-      // 当前月份的周末 - 红色
-      dateColor = '#ff3366';
-    }
-    
-    // 如果是今天或被选中，文字颜色会被覆盖为白色，所以这里不需要特别设置
-    
-    // 背景颜色
-    let bgColor = 'transparent';
-    if (isToday) {
-      bgColor = '#4285f4'; // 今天 - 深蓝色
-    } else if (isSelected) {
-      bgColor = '#79a9f7'; // 选中的日期 - 浅蓝色
-    }
+    // 构建类名
+    let tileClasses = ['tile-content'];
+    if (!isCurrentMonth) tileClasses.push('other-month');
+    if (isWeekend) tileClasses.push('weekend');
+    if (isToday) tileClasses.push('today');
+    if (isSelected && !isToday) tileClasses.push('selected');
     
     return (
-      <div className="tile-content-wrapper" style={{
-        width: '100%', 
-        height: '100%', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '3px 0',
-        backgroundColor: bgColor,
-        borderRadius: '4px',
-        position: 'relative'
-      }}>
-        {isToday && (
-          <div style={{
-            position: 'absolute',
-            top: '2px',
-            right: '2px',
-            fontSize: '10px',
-            color: '#fff',
-            fontWeight: 'bold',
-            width: '14px',
-            height: '14px',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            borderRadius: '2px'
-          }}>今</div>
-        )}
-        <div className="solar-day" style={{
-          fontSize: '16px', 
-          marginBottom: '2px',
-          color: isSelected || isToday ? '#fff' : dateColor,
-        }}>{date.getDate()}</div>
-        <div className="lunar-info" style={{
-          fontSize: '11px', 
-          color: isSelected || isToday ? '#fff' : (isCurrentMonth ? '#666' : '#cccccc'), 
-          minHeight: '16px'
-        }}>{lunarText || ""}</div>
-        {hasEntries && <div className="diary-entry-dot" style={{
-          position: 'absolute', 
-          top: isToday ? '18px' : '5px', // 如果是今天，点的位置要往下移
-          right: '5px', 
-          width: '4px', 
-          height: '4px', 
-          backgroundColor: isSelected || isToday ? '#fff' : '#ff3366', 
-          borderRadius: '50%'
-        }}></div>}
+      <div className={tileClasses.join(' ')}>
+        {isToday && <div className="today-marker">今</div>}
+        <div className="solar-day">{date.getDate()}</div>
+        <div className="lunar-info">{lunarText || ""}</div>
+        {hasEntries && <div className="diary-entry-dot"></div>}
       </div>
     );
   };

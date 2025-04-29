@@ -61,6 +61,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  border-radius: 4px;
 }
 
 /* Custom Cell - Hide Original Date Number */
@@ -75,34 +76,49 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 2px 0;
+  justify-content: center;
+  padding: 3px 0;
   position: relative;
   box-sizing: border-box;
+  border-radius: 4px;
 }
 
 /* Solar Date Style */
 .solar-day {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: normal;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   text-align: center;
   display: block;
+  color: #000;
 }
 
 /* Lunar Info Style */
 .lunar-info {
-  font-size: 12px;
+  font-size: 11px;
   color: #666;
   text-align: center;
   min-height: 16px;
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
+  display: block;
   line-height: 1;
-  margin-top: 3px;
-  pointer-events: auto;
-  z-index: 10;
-  position: relative;
+  margin-top: 2px;
+}
+
+/* "Today" Marker */
+.today-marker {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 12px;
+  color: #fff;
+  font-weight: bold;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 2px;
+  z-index: 5;
 }
 
 /* Diary Entry Dot */
@@ -116,6 +132,11 @@
   right: 5px;
 }
 
+/* Today's Diary Entry Dot Needs to Avoid "Today" Marker */
+.today .diary-entry-dot {
+  top: 18px;
+}
+
 /* Weekend Style */
 .weekend .solar-day {
   color: #ff3366;
@@ -125,6 +146,11 @@
 .other-month .solar-day,
 .other-month .lunar-info {
   color: #cccccc;
+}
+
+/* Other Month Weekend Style */
+.other-month.weekend .solar-day {
+  color: #ffb3c3;
 }
 
 .other-month .diary-entry-dot {
@@ -188,7 +214,7 @@
 
 .selected-tile .solar-day,
 .selected-tile .lunar-info {
-  color: white !important;
+  color: black !important;
 }
 
 /* Override react-calendar default styles */
