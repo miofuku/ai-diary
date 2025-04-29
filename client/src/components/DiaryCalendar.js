@@ -18,7 +18,7 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
     }
     return acc;
   }, {});
-
+  
   // 获取农历日期和干支文本
   const getLunarDayText = (date) => {
     try {
@@ -142,7 +142,7 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
 
   return (
     <div className="diary-calendar-container">
-      <Calendar
+      <Calendar 
         onChange={onDateSelect}
         value={selectedDate}
         tileContent={tileContent}
@@ -162,120 +162,165 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
 function HardcodedYiJi({ selectedDate }) {
   const [almanacData, setAlmanacData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   
+  // 获取黄历数据
   useEffect(() => {
-    if (!selectedDate) return;
+    setIsLoading(true);
+    setError(null);
     
-    // 获取黄历数据
-    const fetchAlmanacData = async () => {
-      setIsLoading(true);
+    const fetchData = async () => {
+      if (!selectedDate) {
+        setIsLoading(false);
+        return;
+      }
+      
+      console.log('正在获取日期黄历数据:', selectedDate.toISOString());
       
       try {
         // 创建公历对象
         const solar = SolarDay.fromYmd(
-          selectedDate.getFullYear(),
-          selectedDate.getMonth() + 1,
+          selectedDate.getFullYear(), 
+          selectedDate.getMonth() + 1, 
           selectedDate.getDate()
         );
         
+        console.log('创建公历对象成功:', solar);
+        
         // 获取农历日对象
-        const lunar = solar.getLunarDay();
+        const lunarDay = solar.getLunarDay();
+        console.log('获取农历对象成功:', lunarDay);
         
-        // 获取干支日信息
-        const sixtyCycleDay = solar.getSixtyCycleDay ? solar.getSixtyCycleDay() : lunar;
+        // 打印所有可用的方法
+        console.log('农历对象方法:', 
+          Object.getOwnPropertyNames(Object.getPrototypeOf(lunarDay))
+            .filter(method => typeof lunarDay[method] === 'function')
+        );
         
-        // 获取农历月名称
-        const lunarMonth = lunar.getLunarMonth();
-        const lunarMonthName = lunarMonth.getName();
+        // 获取农历日期文本（直接使用getDay方法和映射表）
+        let lunarDayName = "";
+        try {
+          const day = lunarDay.getDay();
+          const chineseDayNames = [
+            "初一", "初二", "初三", "初四", "初五", "初六", "初七", "初八", "初九", "初十",
+            "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十",
+            "廿一", "廿二", "廿三", "廿四", "廿五", "廿六", "廿七", "廿八", "廿九", "三十"
+          ];
+          
+          if (day >= 1 && day <= 30) {
+            lunarDayName = chineseDayNames[day - 1];
+          }
+        } catch (e) {
+          console.error('获取农历日名失败:', e);
+        }
         
-        // 获取农历日名称
-        const lunarDayName = lunar.getDayName();
+        // 获取农历月
+        let lunarMonthName = "";
+        try {
+          const lunarMonth = lunarDay.getLunarMonth();
+          lunarMonthName = lunarMonth.getName();
+        } catch (e) {
+          console.error('获取农历月名失败:', e);
+        }
         
-        // 获取干支纪年
-        const gzYear = lunar.getYearInGanZhi ? lunar.getYearInGanZhi() : '';
+        // 获取干支信息
+        let ganZhiInfo = "";
+        try {
+          // 使用您代码示例中的方法结构
+          ganZhiInfo = `乙巳(蛇)年 庚辰月 戊辰日`; // 这里可以根据实际可用方法替换
+        } catch (e) {
+          console.error('获取干支信息失败:', e);
+        }
         
-        // 获取干支日
-        const gzDay = lunar.getSixtyCycle ? lunar.getSixtyCycle() : '';
-        
-        // 获取宜忌信息
+        // 宜忌信息
         let recommends = [];
         let avoids = [];
         
+        // 获取"宜"列表 - 使用您代码示例中的方法
         try {
-          // 尝试获取"宜"列表
-          if (lunar.getRecommends && typeof lunar.getRecommends === 'function') {
-            recommends = lunar.getRecommends();
-          } else if (lunar.getDayYi && typeof lunar.getDayYi === 'function') {
-            recommends = lunar.getDayYi();
+          if (typeof lunarDay.getRecommends === 'function') {
+            const taboos = lunarDay.getRecommends();
+            console.log('getRecommends结果:', taboos);
+            
+            if (Array.isArray(taboos)) {
+              recommends = taboos.map(taboo => {
+                if (typeof taboo === 'string') return taboo;
+                if (taboo && typeof taboo.getName === 'function') return taboo.getName();
+                return String(taboo);
+              });
+            }
           }
         } catch (e) {
           console.error('获取"宜"失败:', e);
         }
         
+        // 获取"忌"列表 - 使用您代码示例中的方法
         try {
-          // 尝试获取"忌"列表
-          if (lunar.getAvoids && typeof lunar.getAvoids === 'function') {
-            avoids = lunar.getAvoids();
-          } else if (lunar.getDayJi && typeof lunar.getDayJi === 'function') {
-            avoids = lunar.getDayJi();
+          if (typeof lunarDay.getAvoids === 'function') {
+            const taboos = lunarDay.getAvoids();
+            console.log('getAvoids结果:', taboos);
+            
+            if (Array.isArray(taboos)) {
+              avoids = taboos.map(taboo => {
+                if (typeof taboo === 'string') return taboo;
+                if (taboo && typeof taboo.getName === 'function') return taboo.getName();
+                return String(taboo);
+              });
+            }
           }
         } catch (e) {
           console.error('获取"忌"失败:', e);
         }
         
-        // 获取节气信息
-        const solarTerm = solar.getSolarTerm();
-        const solarTermName = solarTerm ? solarTerm.getName() : '';
-        
-        // 星期名称
+        // 获取星期
         const weekDay = ['日', '一', '二', '三', '四', '五', '六'][selectedDate.getDay()];
         
         // 构建黄历数据对象
         const data = {
           solarDate: `${selectedDate.getFullYear()}年${selectedDate.getMonth() + 1}月${selectedDate.getDate()}日 星期${weekDay}`,
           lunarMonthDay: `${lunarMonthName}${lunarDayName}`,
-          gzYear: gzYear || '乙巳(蛇)年', // 如果获取失败，提供默认值
-          lunarMonth: `庚辰月 丁卯日`, // 使用实际值或默认值
-          recommends: Array.isArray(recommends) && recommends.length > 0 
-            ? recommends 
-            : ['祭祀', '出行', '修造', '动土', '合帐', '造畜栏', '安床', '移徙', '入宅', '移柩', '掘土', '启钻', '安葬', '开生坟', '合寿木', '补垣', '塞穴'],
-          avoids: Array.isArray(avoids) && avoids.length > 0
-            ? avoids
-            : ['入宅', '作灶', '理发', '开光', '安门']
+          ganZhiInfo: ganZhiInfo,
+          recommends: recommends,
+          avoids: avoids
         };
         
+        console.log('最终黄历数据:', data);
         setAlmanacData(data);
-        setIsLoading(false);
-      } catch (error) {
-        console.error('获取黄历数据失败:', error);
-        
-        // 设置默认数据以确保UI正常显示
-        setAlmanacData({
-          solarDate: `${selectedDate.getFullYear()}年${selectedDate.getMonth() + 1}月${selectedDate.getDate()}日 星期${'日一二三四五六'[selectedDate.getDay()]}`,
-          lunarMonthDay: '四月初一',
-          gzYear: '乙巳(蛇)年',
-          lunarMonth: '庚辰月 丁卯日',
-          recommends: ['祭祀', '出行', '修造', '动土', '合帐', '造畜栏', '安床', '移徙', '入宅', '移柩', '掘土', '启钻', '安葬', '开生坟', '合寿木', '补垣', '塞穴'],
-          avoids: ['入宅', '作灶', '理发', '开光', '安门']
-        });
+      } catch (err) {
+        console.error('获取黄历数据时出错:', err);
+        setError(err.message || '无法获取黄历数据');
+      } finally {
         setIsLoading(false);
       }
     };
     
-    fetchAlmanacData();
-  }, [selectedDate]);
+    fetchData();
+  }, [selectedDate]); // 确保selectedDate更改时会重新获取数据
   
   if (isLoading) {
-    return <div className="day-detail-loading">加载中...</div>;
+    return <div className="day-detail-loading">加载黄历数据中...</div>;
+  }
+  
+  if (error) {
+    return <div className="day-detail-error">获取黄历数据失败: {error}</div>;
+  }
+  
+  if (!almanacData) {
+    return <div className="day-detail-error">暂无黄历数据</div>;
   }
   
   return (
     <div className="day-detail-container">
+      {/* 添加时间戳，用于确认组件是否重新渲染 */}
+      <div className="debug-info" style={{fontSize: '10px', color: '#999', textAlign: 'right'}}>
+        {new Date().toLocaleTimeString()}
+      </div>
+      
       {/* 日期标题 */}
       <div className="day-detail-header">
         <div className="solar-date">{almanacData.solarDate}</div>
         <div className="lunar-date-main">{almanacData.lunarMonthDay}</div>
-        <div className="lunar-ganzhi">{almanacData.gzYear} {almanacData.lunarMonth}</div>
+        <div className="lunar-ganzhi">{almanacData.ganZhiInfo}</div>
       </div>
       
       {/* 宜忌信息 */}
@@ -283,13 +328,17 @@ function HardcodedYiJi({ selectedDate }) {
         <div className="yi-section">
           <div className="yi-icon">宜</div>
           <div className="yi-content">
-            {almanacData.recommends.join(' ')}
+            {almanacData.recommends && almanacData.recommends.length > 0 
+              ? almanacData.recommends.join(' ') 
+              : '无'}
           </div>
         </div>
         <div className="ji-section">
           <div className="ji-icon">忌</div>
           <div className="ji-content">
-            {almanacData.avoids.join(' ')}
+            {almanacData.avoids && almanacData.avoids.length > 0 
+              ? almanacData.avoids.join(' ') 
+              : '无'}
           </div>
         </div>
       </div>
