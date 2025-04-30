@@ -397,14 +397,9 @@
 /* Inline Solar Term Style */
 .solar-term-inline {
   color: #ff9800;
-  background-color: #fff3e0;
-  padding: 2px 8px;
-  border-radius: 12px;
-  margin-left: 12px;
+  padding: 0 5px;
   font-size: 14px;
-  display: inline-block;
-  border: 1px solid #ffe0b2;
-  vertical-align: middle;
+  font-weight: bold;
 }
 
 /* Solar Term in Calendar Tile */

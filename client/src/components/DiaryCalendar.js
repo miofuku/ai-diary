@@ -273,20 +273,19 @@ function HardcodedYiJi({ selectedDate }) {
           // 从公历日获取所在节气
           const term = solar.getTerm();
           if (term) {
-            solarTerm = term.getName();
-            
             // 获取节气天数信息
             const termDay = solar.getTermDay();
             if (termDay) {
               termDayIndex = termDay.getDayIndex();
+              
+              // 只在节气的第一天显示节气名称
+              if (termDayIndex === 0) {
+                solarTerm = term.getName();
+                console.log('今天是节气第一天:', solarTerm);
+              }
             }
             
-            // 如果是节气的第一天，特别标注
-            if (termDayIndex === 0) {
-              solarTerm = `${solarTerm}`;
-            }
-            
-            console.log('获取节气成功:', solarTerm, '天数索引:', termDayIndex);
+            console.log('节气信息:', term.getName(), '天数索引:', termDayIndex);
           }
         } catch (e) {
           console.error('获取节气信息失败:', e);
@@ -384,7 +383,7 @@ function HardcodedYiJi({ selectedDate }) {
         <div className="lunar-ganzhi">
           {almanacData.ganZhiInfo}
           {almanacData.solarTerm && (
-            <span className="solar-term-inline">节气：{almanacData.solarTerm}</span>
+            <span className="solar-term-inline">{almanacData.solarTerm}</span>
           )}
         </div>
       </div>
