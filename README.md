@@ -1,6 +1,6 @@
 # AI-Diary (智能日记)
 
-AI-Diary is an intelligent journaling application that combines traditional diary-keeping with AI-powered insights and Chinese traditional calendar information. The application helps users maintain a consistent journaling habit while providing useful context and analysis through AI.
+AI-Diary is an intelligent journaling application that combines traditional diary-keeping with AI-powered insights and Chinese astrology. The application helps users maintain a consistent journaling habit while providing useful context and analysis through AI.
 
 ## Features
 
