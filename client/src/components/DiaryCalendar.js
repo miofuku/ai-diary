@@ -223,13 +223,23 @@ function HardcodedYiJi({ selectedDate }) {
           console.error('获取农历月名失败:', e);
         }
         
-        // 获取干支信息
+        // 获取干支信息 - 使用正确的方法从 tyme4ts 获取
         let ganZhiInfo = "";
         try {
-          // 使用您代码示例中的方法结构
-          ganZhiInfo = `乙巳(蛇)年 庚辰月 戊辰日`; // 这里可以根据实际可用方法替换
+          // 从公历日获取干支日
+          const sixtyCycleDay = solar.getSixtyCycleDay();
+          
+          // 从干支日获取干支月
+          const sixtyCycleMonth = sixtyCycleDay.getSixtyCycleMonth();
+          
+          // 从干支月获取干支年
+          const sixtyCycleYear = sixtyCycleMonth.getSixtyCycleYear();
+          
+          // 组合年月日干支信息
+          ganZhiInfo = `${sixtyCycleYear.getName()} ${sixtyCycleMonth.getName()} ${sixtyCycleDay.getName()}`;
         } catch (e) {
           console.error('获取干支信息失败:', e);
+          ganZhiInfo = "无法获取干支信息";
         }
         
         // 宜忌信息
