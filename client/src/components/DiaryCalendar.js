@@ -73,6 +73,28 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
     // 获取农历信息 (流日和干支)
     const lunarText = getLunarDayText(date);
     
+    // 获取节气信息
+    let solarTermText = "";
+    try {
+      const solar = SolarDay.fromYmd(
+        date.getFullYear(),
+        date.getMonth() + 1,
+        date.getDate()
+      );
+      
+      const term = solar.getTerm();
+      if (term) {
+        // 获取节气天数信息
+        const termDay = solar.getTermDay();
+        if (termDay && termDay.getDayIndex() === 0) {
+          // 只在节气的第一天显示节气名称
+          solarTermText = term.getName();
+        }
+      }
+    } catch (e) {
+      console.error('获取节气信息失败:', e, date);
+    }
+    
     // 判断是否属于当前月份
     const isCurrentMonth = date.getMonth() === selectedDate.getMonth();
     
@@ -98,12 +120,14 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
     if (isWeekend) tileClasses.push('weekend');
     if (isToday) tileClasses.push('today');
     if (isSelected && !isToday) tileClasses.push('selected');
+    if (solarTermText) tileClasses.push('has-solar-term');
     
     return (
       <div className={tileClasses.join(' ')}>
         {isToday && <div className="today-marker">今</div>}
         <div className="solar-day">{date.getDate()}</div>
         <div className="lunar-info">{lunarText || ""}</div>
+        {solarTermText && <div className="tile-solar-term">{solarTermText}</div>}
         {hasEntries && <div className="diary-entry-dot"></div>}
       </div>
     );
@@ -242,6 +266,32 @@ function HardcodedYiJi({ selectedDate }) {
           ganZhiInfo = "无法获取干支信息";
         }
         
+        // 获取节气信息
+        let solarTerm = null;
+        let termDayIndex = null;
+        try {
+          // 从公历日获取所在节气
+          const term = solar.getTerm();
+          if (term) {
+            solarTerm = term.getName();
+            
+            // 获取节气天数信息
+            const termDay = solar.getTermDay();
+            if (termDay) {
+              termDayIndex = termDay.getDayIndex();
+            }
+            
+            // 如果是节气的第一天，特别标注
+            if (termDayIndex === 0) {
+              solarTerm = `${solarTerm}`;
+            }
+            
+            console.log('获取节气成功:', solarTerm, '天数索引:', termDayIndex);
+          }
+        } catch (e) {
+          console.error('获取节气信息失败:', e);
+        }
+        
         // 宜忌信息
         let recommends = [];
         let avoids = [];
@@ -290,6 +340,7 @@ function HardcodedYiJi({ selectedDate }) {
           solarDate: `${selectedDate.getFullYear()}年${selectedDate.getMonth() + 1}月${selectedDate.getDate()}日 星期${weekDay}`,
           lunarMonthDay: `${lunarMonthName}${lunarDayName}`,
           ganZhiInfo: ganZhiInfo,
+          solarTerm: solarTerm,
           recommends: recommends,
           avoids: avoids
         };
@@ -330,7 +381,12 @@ function HardcodedYiJi({ selectedDate }) {
       <div className="day-detail-header">
         <div className="solar-date">{almanacData.solarDate}</div>
         <div className="lunar-date-main">{almanacData.lunarMonthDay}</div>
-        <div className="lunar-ganzhi">{almanacData.ganZhiInfo}</div>
+        <div className="lunar-ganzhi">
+          {almanacData.ganZhiInfo}
+          {almanacData.solarTerm && (
+            <span className="solar-term-inline">节气：{almanacData.solarTerm}</span>
+          )}
+        </div>
       </div>
       
       {/* 宜忌信息 */}
