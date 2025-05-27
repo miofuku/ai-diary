@@ -908,3 +908,132 @@
   flex-direction: column;
   box-sizing: border-box;
 }
+
+/* Selected Date Entry Styles */
+.selected-date-entry {
+  background-color: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.selected-date-entry h2 {
+  margin-top: 0;
+  display: flex;
+  align-items: center;
+  margin-bottom: 15px;
+  color: #333;
+  font-weight: normal;
+}
+
+.entry-date {
+  color: #ff7a5c;
+  margin-right: 10px;
+  font-weight: bold;
+}
+
+.entry-title {
+  font-weight: normal;
+  color: #555;
+}
+
+.entry-content-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.entry-content-item {
+  border-bottom: 1px solid #eee;
+  padding-bottom: 15px;
+}
+
+.entry-content-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.entry-content {
+  line-height: 1.6;
+  color: #333;
+  white-space: pre-line;
+}
+
+.entry-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.edit-button {
+  background-color: transparent;
+  border: 1px solid #ff7a5c;
+  color: #ff7a5c;
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-button:hover {
+  background-color: #ff7a5c;
+  color: white;
+}
+
+/* Import dialog styles */
+.import-dialog {
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 20px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.import-dialog p {
+  margin: 0;
+  color: #555;
+}
+
+.import-dialog input[type="file"] {
+  padding: 10px;
+  border: 1px dashed #ccc;
+  border-radius: 4px;
+  background-color: #f9f9f9;
+}
+
+.import-button {
+  background-color: #fff2f0;
+  color: #ff7a5c;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.import-button:hover {
+  background-color: #ffe5e0;
+}
+
+.close-button {
+  background-color: #eee;
+  color: #555;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  align-self: flex-end;
+  transition: all 0.2s;
+}
+
+.close-button:hover {
+  background-color: #ddd;
+}

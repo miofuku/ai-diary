@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './App.css';
 import DiaryCalendar from './components/DiaryCalendar';
 
@@ -13,18 +13,33 @@ function App() {
   const [editContent, setEditContent] = useState('');
   const [selectedTheme, setSelectedTheme] = useState(null);
   const [themeRelatedEntries, setThemeRelatedEntries] = useState([]);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const fileInputRef = useRef(null);
 
   const fetchEntries = async () => {
     try {
       console.log('Fetching entries...');
-      const response = await fetch('http://localhost:3001/api/entries');
+      let data = [];
       
-      if (!response.ok) {
-        throw new Error(`Server responded with status: ${response.status}`);
+      try {
+        // First try the API endpoint
+        const response = await fetch('http://localhost:3001/api/entries');
+        
+        if (response.ok) {
+          data = await response.json();
+          console.log('Entries fetched from API:', data.length);
+        } else {
+          throw new Error('API not available');
+        }
+      } catch (apiError) {
+        console.log('API not available, using default entries');
+        // Instead of loading from a file, we keep entries in the app's state
+        // This would typically be populated from local storage or IndexedDB
+        // For demo purposes, we'll use entries passed as props or an empty array
+        data = window.entriesData || [];
+        console.log('Using local entries:', data.length);
       }
       
-      const data = await response.json();
-      console.log('Entries fetched:', data.length);
       setEntries(data);
     } catch (error) {
       console.error('Failed to fetch entries:', error);
@@ -72,41 +87,92 @@ function App() {
         // Get the most recent entry for this date
         const latestEntry = filteredEntries[filteredEntries.length - 1];
         
-        // Send both the existing content and new content to the server
-        // Let the server handle the intelligent merging
-        const response = await fetch(`http://localhost:3001/api/entries/${latestEntry.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            existingContent: latestEntry.content,
-            newContent: content,
-            appendMode: true
-          }),
-        });
+        try {
+          // First try the API endpoint
+          const response = await fetch(`http://localhost:3001/api/entries/${latestEntry.id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              existingContent: latestEntry.content,
+              newContent: content,
+              appendMode: true
+            }),
+          });
 
-        if (response.ok) {
+          if (response.ok) {
+            setContent('');
+            fetchEntries();
+          } else {
+            throw new Error('API not available');
+          }
+        } catch (apiError) {
+          // Handle locally if API is not available
+          console.log('API not available, saving locally');
+          // Update the entry locally
+          const updatedEntry = {
+            ...latestEntry,
+            content: latestEntry.content + '\n\n' + content,
+            updatedAt: new Date().toISOString()
+          };
+          
+          // Update the entry in the local array
+          const updatedEntries = entries.map(entry => 
+            entry.id === latestEntry.id ? updatedEntry : entry
+          );
+          
+          // Save to local storage
+          localStorage.setItem('diaryEntries', JSON.stringify(updatedEntries));
+          window.entriesData = updatedEntries;
+          
+          // Update state
+          setEntries(updatedEntries);
           setContent('');
-          fetchEntries();
         }
       } else {
         // No existing entries for this date, create a new one
-        const response = await fetch('http://localhost:3001/api/entries', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            content: content,
-            type: 'text', // Removed voice option, default to text
-            targetDate: selectedDate.toISOString()
-          }),
-        });
+        try {
+          const response = await fetch('http://localhost:3001/api/entries', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              content: content,
+              type: 'text',
+              targetDate: selectedDate.toISOString()
+            }),
+          });
 
-        if (response.ok) {
+          if (response.ok) {
+            setContent('');
+            fetchEntries();
+          } else {
+            throw new Error('API not available');
+          }
+        } catch (apiError) {
+          // Handle locally if API is not available
+          console.log('API not available, saving locally');
+          
+          // Create a new entry locally
+          const newEntry = {
+            id: Date.now(), // Use timestamp as ID
+            content: content,
+            type: 'text',
+            createdAt: selectedDate.toISOString()
+          };
+          
+          // Add to the local array
+          const updatedEntries = [...entries, newEntry];
+          
+          // Save to local storage
+          localStorage.setItem('diaryEntries', JSON.stringify(updatedEntries));
+          window.entriesData = updatedEntries;
+          
+          // Update state
+          setEntries(updatedEntries);
           setContent('');
-          fetchEntries();
         }
       }
     } catch (error) {
@@ -128,20 +194,47 @@ function App() {
     if (!editContent.trim() || !editingEntryId) return;
 
     try {
-      const response = await fetch(`http://localhost:3001/api/entries/${editingEntryId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          content: editContent
-        }),
-      });
+      try {
+        const response = await fetch(`http://localhost:3001/api/entries/${editingEntryId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            content: editContent
+          }),
+        });
 
-      if (response.ok) {
+        if (response.ok) {
+          setEditingEntryId(null);
+          setEditContent('');
+          fetchEntries();
+        } else {
+          throw new Error('API not available');
+        }
+      } catch (apiError) {
+        // Handle locally if API is not available
+        console.log('API not available, saving edit locally');
+        
+        // Update the entry locally
+        const updatedEntries = entries.map(entry => 
+          entry.id === editingEntryId 
+            ? { 
+                ...entry, 
+                content: editContent,
+                updatedAt: new Date().toISOString()
+              } 
+            : entry
+        );
+        
+        // Save to local storage
+        localStorage.setItem('diaryEntries', JSON.stringify(updatedEntries));
+        window.entriesData = updatedEntries;
+        
+        // Update state
+        setEntries(updatedEntries);
         setEditingEntryId(null);
         setEditContent('');
-        fetchEntries();
       }
     } catch (error) {
       console.error('Update entry failed:', error);
@@ -270,6 +363,44 @@ function App() {
     }
   };
 
+  // Import entries from a local JSON file
+  const importEntriesFromFile = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const importedEntries = JSON.parse(e.target.result);
+        if (Array.isArray(importedEntries)) {
+          // Merge with existing entries or replace them
+          const updatedEntries = [...entries, ...importedEntries];
+          
+          // Save to local storage
+          localStorage.setItem('diaryEntries', JSON.stringify(updatedEntries));
+          window.entriesData = updatedEntries;
+          
+          // Update state
+          setEntries(updatedEntries);
+          console.log(`Imported ${importedEntries.length} entries successfully`);
+          
+          // Reset file input
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
+          
+          // Close dialog
+          setShowImportDialog(false);
+        } else {
+          console.error('Invalid entries format, expected an array');
+        }
+      } catch (error) {
+        console.error('Failed to parse imported entries:', error);
+      }
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className="App">
       <header className="app-header">
@@ -289,7 +420,32 @@ function App() {
           <div className="content-inner">
             <div className="page-header">
               <h1>首页</h1>
+              <button 
+                className="import-button"
+                onClick={() => setShowImportDialog(!showImportDialog)}
+              >
+                导入日记
+              </button>
             </div>
+
+            {/* Import dialog */}
+            {showImportDialog && (
+              <div className="import-dialog">
+                <p>选择本地的日记 JSON 文件导入（不会上传到服务器）</p>
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={importEntriesFromFile}
+                  ref={fileInputRef}
+                />
+                <button 
+                  className="close-button"
+                  onClick={() => setShowImportDialog(false)}
+                >
+                  关闭
+                </button>
+              </div>
+            )}
 
             {!editingEntryId && (
               <div className="input-card">
@@ -364,6 +520,34 @@ function App() {
                   <button type="button" onClick={cancelEditing} className="cancel-button">
                     取消
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* Selected Date Entry Display */}
+            {filteredEntries.length > 0 && (
+              <div className="selected-date-entry">
+                <h2>
+                  <span className="entry-date">{formatDate(selectedDate)}</span>
+                  <span className="entry-title">日记</span>
+                </h2>
+                <div className="entry-content-list">
+                  {filteredEntries.map((entry) => (
+                    <div key={entry.id} className="entry-content-item">
+                      <div 
+                        className="entry-content"
+                        dangerouslySetInnerHTML={renderMarkdown(entry.content)}
+                      />
+                      <div className="entry-actions">
+                        <button 
+                          onClick={() => startEditing(entry)} 
+                          className="edit-button"
+                        >
+                          编辑
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
