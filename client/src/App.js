@@ -294,7 +294,7 @@ function App() {
 
             {!editingEntryId && (
               <div className="input-card">
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} className="diary-form">
                   <textarea
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
