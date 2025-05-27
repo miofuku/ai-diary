@@ -10,10 +10,11 @@
   width: 100%;
   max-width: 100%;
   background: white;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #eaeaea;
   border-radius: 8px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
   padding: 8px;
+  overflow: hidden;
 }
 
 /* Calendar Navigation */
@@ -56,12 +57,13 @@
 /* Date Cell Style */
 .react-calendar__tile {
   padding: 0 !important;
-  height: 64px;
+  height: 100px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   border-radius: 4px;
+  position: relative;
 }
 
 /* Custom Cell - Hide Original Date Number */
@@ -76,7 +78,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   padding: 3px 0;
   position: relative;
   box-sizing: border-box;
@@ -87,10 +89,13 @@
 .solar-day {
   font-size: 14px;
   font-weight: normal;
-  margin-bottom: 2px;
+  margin: 0;
+  padding-top: 4px;
   text-align: center;
   display: block;
   color: #000;
+  height: 22px;
+  line-height: 22px;
 }
 
 /* Lunar Info Style */
@@ -98,43 +103,49 @@
   font-size: 11px;
   color: #666;
   text-align: center;
-  min-height: 16px;
+  height: 16px;
+  line-height: 16px;
   display: block;
-  line-height: 1;
-  margin-top: 2px;
+  margin: 14px 0;
+  padding: 0;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* "Today" Marker */
+/* Today Marker */
 .today-marker {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  font-size: 12px;
-  color: #fff;
+  top: 5px;
+  left: 5px;
+  color: #ff7a5c;
+  font-size: 11px;
   font-weight: bold;
   width: 14px;
   height: 14px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border-radius: 2px;
-  z-index: 5;
+  line-height: 14px;
+  text-align: center;
 }
 
 /* Diary Entry Dot */
 .diary-entry-dot {
   width: 4px;
   height: 4px;
-  background-color: #ff3366;
+  background-color: #ff7a5c;
   border-radius: 50%;
-  position: absolute;
-  top: 5px;
-  right: 5px;
+  position: absolute !important;
+  top: 5px !important;
+  right: 5px !important;
+  transform: none !important;
+  left: auto !important;
+  bottom: auto !important;
 }
 
-/* Today's Diary Entry Dot Needs to Avoid "Today" Marker */
+/* Today's Diary Entry Dot - also in top right, just needs to avoid today marker */
 .today .diary-entry-dot {
-  top: 18px;
+  top: 5px !important;
+  right: 15px !important;
 }
 
 /* Weekend Style */
@@ -159,7 +170,8 @@
 
 /* Selected Date Style */
 .react-calendar__tile--active {
-  background-color: #4285f4 !important;
+  background-color: #ff7a5c !important;
+  color: white !important;
 }
 
 .react-calendar__tile--active .solar-day,
@@ -183,7 +195,8 @@
 
 /* Today Date Style */
 .react-calendar__tile--now:not(.react-calendar__tile--active) {
-  background-color: #e8f5e9;
+  background-color: #ff7a5c !important;
+  color: white !important;
 }
 
 /* Holiday and Solar Term Style */
@@ -204,7 +217,8 @@
 
 /* Today (current day) styling */
 .today-tile {
-  background-color: #4285f4 !important; /* Today - Deep Blue */
+  background-color: #ff7a5c !important;
+  color: white !important;
 }
 
 .today-tile .solar-day,
@@ -214,26 +228,28 @@
 
 .selected-tile .solar-day,
 .selected-tile .lunar-info {
-  color: black !important;
+  color: white !important;
 }
 
 /* Override react-calendar default styles */
 .react-calendar__tile--now:not(.react-calendar__tile--active) {
-  background-color: #4285f4 !important; /* Today - Deep Blue */
+  background-color: #ff7a5c !important;
+  color: white !important;
 }
 
 .react-calendar__tile--active:not(.react-calendar__tile--now) {
-  background-color: #b7d0f8 !important; /* Selected day - Light Blue */
+  background-color: #ffbdb1 !important;
+  color: white !important;
 }
 
 /* Weekend dates within current month */
 .react-calendar__month-view__days__day--weekend:not(.react-calendar__month-view__days__day--neighboringMonth) .solar-day {
-  color: #ff3366 !important; /* Weekend in current month - Red */
+  color: #ff7a5c !important;
 }
 
 /* Weekend dates in neighboring months */
 .react-calendar__month-view__days__day--weekend.react-calendar__month-view__days__day--neighboringMonth .solar-day {
-  color: #fdb4c3 !important; /* Weekend in neighboring months - Light Red */
+  color: #ffbdb1 !important;
 }
 
 /* Ensure all date cells have consistent sizing */
@@ -391,12 +407,12 @@
   visibility: visible !important;
   opacity: 1 !important;
   line-height: 1;
-  margin-top: 3px;
+  margin-top: 0;
 }
 
 /* Inline Solar Term Style */
 .solar-term-inline {
-  color: #ff9800;
+  color: #ff7a5c !important;
   padding: 0 5px;
   font-size: 14px;
   font-weight: bold;
@@ -405,15 +421,27 @@
 /* Solar Term in Calendar Tile */
 .tile-solar-term {
   font-size: 10px;
-  color: #ff9800;
+  color: #ff7a5c;
   position: absolute;
-  bottom: 2px;
+  bottom: 3px;
   text-align: center;
   width: 100%;
   font-weight: bold;
+  height: 14px;
+  line-height: 14px;
 }
 
+/* Fix for entries with solar terms */
 .has-solar-term .lunar-info {
-  margin-bottom: 10px;
+  margin-bottom: 0;
+}
+
+/* For any hard-coded blue colors that might still be present */
+.solar-term-inline {
+  color: #ff7a5c !important;
+}
+
+.debug-info {
+  display: none;
 }
 

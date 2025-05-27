@@ -282,7 +282,6 @@ function App() {
           <a href="#" className="nav-link">日记</a>
           <a href="#" className="nav-link">日历</a>
         </nav>
-        <button className="new-entry-button">+ 新条目</button>
       </header>
       
       <div className="app-container">

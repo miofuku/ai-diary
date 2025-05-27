@@ -124,11 +124,11 @@ function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
     
     return (
       <div className={tileClasses.join(' ')}>
-        {isToday && <div className="today-marker">今</div>}
-        <div className="solar-day">{date.getDate()}</div>
-        <div className="lunar-info">{lunarText || ""}</div>
-        {solarTermText && <div className="tile-solar-term">{solarTermText}</div>}
         {hasEntries && <div className="diary-entry-dot"></div>}
+        {isToday && <div className="today-marker">今</div>}
+        <span className="solar-day">{date.getDate()}</span>
+        <span className="lunar-info">{lunarText || "\u00A0"}</span>
+        {solarTermText && <div className="tile-solar-term">{solarTermText}</div>}
       </div>
     );
   };
