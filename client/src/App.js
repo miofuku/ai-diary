@@ -404,15 +404,25 @@ function App() {
   return (
     <div className="App">
       <header className="app-header">
-        <div className="logo">
-          <span className="logo-icon">📓</span>
-          <span className="logo-text">Reflectly</span>
+        <div className="logo-nav">
+          <div className="logo">
+            <span className="logo-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M19 3H5C3.89 3 3 3.9 3 5V19C3 20.1 3.89 21 5 21H19C20.11 21 21 20.1 21 19V5C21 3.9 20.11 3 19 3ZM19 19H5V5H19V19ZM17 12H7V10H17V12ZM13 16H7V14H13V16ZM7 8H17V6H7V8Z" fill="#FF7A5C"/>
+              </svg>
+            </span>
+            <span className="logo-text">Reflectly</span>
+          </div>
+          <nav className="app-nav">
+            <a href="#" className="nav-link active">首页</a>
+            <a href="#" className="nav-link">日记</a>
+            <a href="#" className="nav-link">日历</a>
+          </nav>
         </div>
-        <nav className="app-nav">
-          <a href="#" className="nav-link active">首页</a>
-          <a href="#" className="nav-link">日记</a>
-          <a href="#" className="nav-link">日历</a>
-        </nav>
+        <button className="new-project-button">
+          <span className="plus-icon">+</span>
+          <span>新条目</span>
+        </button>
       </header>
       
       <div className="app-container">
@@ -420,12 +430,6 @@ function App() {
           <div className="content-inner">
             <div className="page-header">
               <h1>首页</h1>
-              <button 
-                className="import-button"
-                onClick={() => setShowImportDialog(!showImportDialog)}
-              >
-                导入日记
-              </button>
             </div>
 
             {/* Import dialog */}
@@ -460,13 +464,19 @@ function App() {
                   <div className="input-toolbar">
                     <div className="toolbar-icons">
                       <button type="button" className="icon-button">
-                        <span role="img" aria-label="document">📝</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2ZM18 20H6V4H13V9H18V20ZM8 16H16V18H8V16ZM8 12H16V14H8V12Z" fill="#666"/>
+                        </svg>
                       </button>
                       <button type="button" className="icon-button">
-                        <span role="img" aria-label="microphone">🎨</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M19 5V19H5V5H19ZM19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3ZM14.14 11.86L11.14 15.73L9 13.14L6 17H18L14.14 11.86Z" fill="#666"/>
+                        </svg>
                       </button>
                       <button type="button" className="icon-button">
-                        <span role="img" aria-label="attach">📎</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M16.5 6V17.5C16.5 19.71 14.71 21.5 12.5 21.5C10.29 21.5 8.5 19.71 8.5 17.5V5C8.5 3.62 9.62 2.5 11 2.5C12.38 2.5 13.5 3.62 13.5 5V15.5C13.5 16.05 13.05 16.5 12.5 16.5C11.95 16.5 11.5 16.05 11.5 15.5V6H10V15.5C10 16.88 11.12 18 12.5 18C13.88 18 15 16.88 15 15.5V5C15 2.79 13.21 1 11 1C8.79 1 7 2.79 7 5V17.5C7 20.54 9.46 23 12.5 23C15.54 23 18 20.54 18 17.5V6H16.5Z" fill="#666"/>
+                        </svg>
                       </button>
                     </div>
                     <button type="submit" disabled={!content.trim()} className="save-button">
@@ -566,7 +576,8 @@ function App() {
                 ))}
               </div>
               <button className="add-theme-button">
-                <span>+ 添加主题</span>
+                <span className="plus-icon">+</span>
+                <span>添加主题</span>
               </button>
 
               {selectedTheme && themeRelatedEntries.length > 0 && (
