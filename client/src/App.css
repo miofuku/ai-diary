@@ -1,3 +1,4 @@
+/* Core App Layout */
 .App {
   max-width: 1400px;
   margin: 0 auto;
@@ -8,6 +9,7 @@
   min-height: 100vh;
 }
 
+/* Header */
 .app-header {
   display: flex;
   align-items: center;
@@ -85,6 +87,7 @@
   line-height: 1;
 }
 
+/* Main Layout */
 .app-container {
   display: flex;
   min-height: calc(100vh - 60px);
@@ -131,24 +134,6 @@
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
-}
-
-.filter-button {
-  color: #ff7a5c;
-  background-color: #fff2f0;
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  font-size: 0.875rem;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: background-color 0.2s;
-}
-
-.filter-button:hover {
-  background-color: #ffe5e0;
 }
 
 /* Input card styling */
@@ -396,7 +381,7 @@
 }
 
 .view-details-button:hover {
-  background-color: #fff2f0;
+  background-color: #ffe7e3;
 }
 
 .view-all-container {
@@ -406,7 +391,7 @@
 }
 
 .view-all-button {
-  background-color: #fff2f0;
+  background-color: #ffe7e3;
   color: #ff7a5c;
   border: none;
   border-radius: 20px;
@@ -419,95 +404,6 @@
 
 .view-all-button:hover {
   background-color: #ffe5e0;
-}
-
-/* Recent entries section styling */
-.recent-entries-section {
-  background-color: #fff;
-  border-radius: 8px;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.section-header h2 {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 500;
-}
-
-.view-all-link {
-  color: #ff7a5c;
-  text-decoration: none;
-  font-size: 0.875rem;
-}
-
-.view-all-link:hover {
-  text-decoration: underline;
-}
-
-.recent-entries-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.recent-entry-item {
-  display: flex;
-  align-items: center;
-  padding: 1rem;
-  border-bottom: 1px solid #f0f0f0;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.recent-entry-item:last-child {
-  border-bottom: none;
-}
-
-.recent-entry-item:hover {
-  background-color: #f9f9f9;
-}
-
-.entry-icon {
-  width: 2.5rem;
-  height: 2.5rem;
-  background-color: #fff2f0;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.25rem;
-  margin-right: 1rem;
-  flex-shrink: 0;
-}
-
-.entry-details {
-  flex: 1;
-}
-
-.entry-title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 500;
-  margin-bottom: 0.25rem;
-}
-
-.entry-time {
-  color: #6b7280;
-  font-size: 0.875rem;
-}
-
-.entry-arrow {
-  color: #ccc;
-  font-size: 1.5rem;
-  margin-left: 0.5rem;
 }
 
 /* Edit form styling */
@@ -608,144 +504,9 @@
   font-weight: bold;
 }
 
-/* Preserve the original calendar styling */
+/* Calendar styling */
 .diary-calendar-container {
   margin-bottom: 1.5rem;
-}
-
-/* Keep the react-calendar styling */
-.react-calendar {
-  width: 100% !important;
-  max-width: 100%;
-  border: 1px solid #eaeaea;
-  border-radius: 8px;
-  background-color: #fff;
-  font-family: inherit;
-  line-height: 1.125em;
-  margin-bottom: 15px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-  overflow: hidden;
-}
-
-/* Ensure the viewContainer is visible */
-.react-calendar__viewContainer {
-  overflow: visible;
-  padding: 0 6px 6px;
-}
-
-/* Enhanced calendar styling for weekday headers */
-.react-calendar__month-view__weekdays {
-  text-align: center;
-  text-transform: uppercase;
-  font-weight: bold;
-  font-size: 0.75em;
-  padding: 8px 0;
-  display: flex;
-  justify-content: space-around;
-  background-color: #fff;
-}
-
-.react-calendar__month-view__weekdays__weekday {
-  padding: 5px 0;
-  color: #333;
-  flex: 1;
-}
-
-.react-calendar__month-view__weekdays__weekday abbr {
-  text-decoration: none;
-  cursor: default;
-}
-
-/* Improve date number visibility */
-.react-calendar__tile {
-  padding: 0;
-  text-align: center;
-  line-height: 16px;
-  border-radius: 4px;
-  position: relative;
-  font-weight: bold;
-  height: 60px;
-}
-
-/* Month view specifically */
-.react-calendar__month-view__days__day {
-  color: #333;
-}
-
-/* Weekend styling */
-.react-calendar__month-view__days__day--weekend {
-  color: #ff7a5c;
-}
-
-/* Different month dates */
-.react-calendar__month-view__days__day--neighboringMonth {
-  color: #ccc;
-}
-
-/* Active date */
-.react-calendar__tile--active {
-  background-color: #ff7a5c;
-  color: white !important;
-}
-
-/* Hover state */
-.react-calendar__tile:enabled:hover {
-  background-color: #fff2f0;
-}
-
-/* Today's date styling */
-.react-calendar__tile--now {
-  background: #ff7a5c;
-  color: white;
-  font-size: inherit !important;
-  font-weight: normal !important;
-}
-
-.react-calendar__tile--now abbr {
-  font-weight: normal !important;
-  font-size: inherit !important;
-}
-
-/* Ensure all date cells have consistent sizing */
-.react-calendar__tile {
-  font-size: inherit !important;
-  font-weight: normal !important;
-}
-
-/* Calendar navigation styling */
-.react-calendar__navigation {
-  display: flex;
-  height: 44px;
-  margin-bottom: 5px;
-  background-color: #fff;
-}
-
-.react-calendar__navigation button {
-  min-width: 44px;
-  background: none;
-  padding: 10px;
-  border: 0;
-  color: #333;
-  font-weight: bold;
-}
-
-.react-calendar__navigation button:enabled:hover,
-.react-calendar__navigation button:enabled:focus {
-  background-color: #fff2f0;
-}
-
-.react-calendar__navigation button[disabled] {
-  background-color: #f5f5f5;
-}
-
-.react-calendar__navigation__label {
-  flex-grow: 1;
-  font-weight: bold;
-  font-size: 1em;
-}
-
-.react-calendar__navigation__arrow {
-  font-size: 1.2em;
 }
 
 /* Day with entries indicator */
@@ -758,136 +519,6 @@
   height: 4px;
   border-radius: 50%;
   background-color: #ff7a5c;
-}
-
-/* 黄历 section styling */
-.day-detail-container {
-  border: 1px solid #eaeaea;
-  border-radius: 8px;
-  padding: 15px;
-  background-color: #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-  margin-bottom: 15px;
-}
-
-.day-detail-header {
-  margin-bottom: 12px;
-  text-align: center;
-}
-
-.solar-date {
-  font-size: 1.1em;
-  font-weight: bold;
-  color: #333;
-}
-
-.lunar-date-main {
-  font-size: 1.05em;
-  color: #ff7a5c;
-  margin: 5px 0;
-  font-weight: 500;
-}
-
-.lunar-ganzhi {
-  font-size: 0.9em;
-  color: #777;
-}
-
-.day-yi-ji {
-  display: flex;
-  margin-top: 15px;
-}
-
-.yi-section, .ji-section {
-  flex: 1;
-  display: flex;
-  margin: 0 5px;
-}
-
-.yi-icon, .ji-icon {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  margin-right: 8px;
-  font-size: 0.9em;
-  font-weight: bold;
-}
-
-.yi-icon {
-  background-color: #ff7a5c;
-  color: white;
-}
-
-.ji-icon {
-  background-color: #ea4335;
-  color: white;
-}
-
-.yi-content, .ji-content {
-  flex: 1;
-  font-size: 0.9em;
-  color: #555;
-}
-
-.day-detail-loading {
-  text-align: center;
-  padding: 20px;
-  color: #777;
-}
-
-/* Custom styles for lunar calendar display */
-.custom-tile {
-  position: relative;
-  height: 60px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.tile-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  width: 100%;
-  font-size: 0.8em;
-  padding: 2px;
-}
-
-.solar-day {
-  font-size: 1.1em;
-  font-weight: bold;
-  margin-bottom: 2px;
-}
-
-.lunar-info {
-  font-size: 0.75em;
-  color: #666;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  width: 100%;
-  text-align: center;
-}
-
-.today-marker {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  font-size: 0.7em;
-  color: #ff7a5c;
-  font-weight: bold;
-}
-
-.tile-solar-term {
-  font-size: 0.7em;
-  color: #ff7a5c;
-  margin-top: 1px;
 }
 
 /* Responsive design */
@@ -1040,7 +671,7 @@
 }
 
 .import-button {
-  background-color: #fff2f0;
+  background-color: #fcedeb;
   color: #ff7a5c;
   border: none;
   border-radius: 20px;
@@ -1069,95 +700,6 @@
 
 .close-button:hover {
   background-color: #ddd;
-}
-
-/* Almanac section styles */
-.almanac-section {
-  background-color: #fff;
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-top: 2rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.almanac-content {
-  display: flex;
-  flex-direction: column;
-}
-
-.almanac-date-header {
-  text-align: center;
-  margin-bottom: 1rem;
-}
-
-.almanac-solar-date {
-  font-size: 1.1rem;
-  color: #333;
-  margin-bottom: 0.5rem;
-}
-
-.almanac-lunar-date {
-  font-size: 1.5rem;
-  color: #ff3b30;
-  font-weight: bold;
-  margin-bottom: 0.5rem;
-}
-
-.almanac-ganzhi {
-  font-size: 0.9rem;
-  color: #666;
-}
-
-.almanac-divider {
-  height: 1px;
-  background-color: #eee;
-  margin: 1rem 0;
-}
-
-.almanac-yi, .almanac-ji {
-  display: flex;
-  margin-bottom: 1rem;
-}
-
-.almanac-circle {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 1.1rem;
-  margin-right: 1rem;
-  flex-shrink: 0;
-}
-
-.almanac-yi .almanac-circle {
-  background-color: #4cd964;
-  color: white;
-}
-
-.almanac-ji .almanac-circle {
-  background-color: #ff3b30;
-  color: white;
-}
-
-.almanac-items {
-  font-size: 0.9rem;
-  color: #333;
-  line-height: 1.6;
-  padding-top: 0.5rem;
-}
-
-.almanac-more {
-  text-align: right;
-  margin-top: 1rem;
-}
-
-.almanac-more a {
-  color: #ff7a5c;
-  text-decoration: none;
-  font-size: 0.9rem;
 }
 
 .icon-button svg path {
