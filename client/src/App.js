@@ -475,7 +475,7 @@ function App() {
                       </button>
                       <button type="button" className="icon-button">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M16.5 6V17.5C16.5 19.71 14.71 21.5 12.5 21.5C10.29 21.5 8.5 19.71 8.5 17.5V5C8.5 3.62 9.62 2.5 11 2.5C12.38 2.5 13.5 3.62 13.5 5V15.5C13.5 16.05 13.05 16.5 12.5 16.5C11.95 16.5 11.5 16.05 11.5 15.5V6H10V15.5C10 16.88 11.12 18 12.5 18C13.88 18 15 16.88 15 15.5V5C15 2.79 13.21 1 11 1C8.79 1 7 2.79 7 5V17.5C7 20.54 9.46 23 12.5 23C15.54 23 18 20.54 18 17.5V6H16.5Z" fill="#666"/>
+                          <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" fill="#666"/>
                         </svg>
                       </button>
                     </div>
@@ -535,12 +535,12 @@ function App() {
             )}
 
             {/* Selected Date Entry Display */}
-            {filteredEntries.length > 0 && (
-              <div className="selected-date-entry">
-                <h2>
-                  <span className="entry-date">{formatDate(selectedDate)}</span>
-                  <span className="entry-title">日记</span>
-                </h2>
+            <div className="selected-date-entry">
+              <div className="selected-date-header">
+                <div className="selected-date">{formatDate(selectedDate)}</div>
+              </div>
+              
+              {filteredEntries.length > 0 ? (
                 <div className="entry-content-list">
                   {filteredEntries.map((entry) => (
                     <div key={entry.id} className="entry-content-item">
@@ -559,8 +559,12 @@ function App() {
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="no-entry-message">
+                  这一天还没有日记内容
+                </div>
+              )}
+            </div>
 
             <div className="themes-section">
               <h2>日记主题</h2>
@@ -616,6 +620,7 @@ function App() {
             onDateSelect={handleDateSelect} 
             selectedDate={selectedDate}
           />
+
         </aside>
       </div>
     </div>

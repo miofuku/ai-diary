@@ -407,6 +407,9 @@ function HardcodedYiJi({ selectedDate }) {
           </div>
         </div>
       </div>
+      <div className="almanac-more">
+                <a href="#">查看详情 →</a>
+      </div>
     </div>
   );
 }

@@ -111,7 +111,7 @@
   margin-top: 0;
   margin-bottom: 1rem;
   font-size: 1.25rem;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .content-inner {
@@ -130,7 +130,7 @@
 .page-header h1 {
   margin: 0;
   font-size: 1.5rem;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .filter-button {
@@ -269,7 +269,7 @@
   margin-top: 0;
   margin-bottom: 1rem;
   font-size: 1.25rem;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .theme-tags {
@@ -943,47 +943,54 @@
   margin-bottom: 20px;
 }
 
-.selected-date-entry h2 {
-  margin-top: 0;
+.selected-date-header {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   margin-bottom: 15px;
-  color: #333;
-  font-weight: normal;
-  font-size: 1.25rem;
 }
 
-.entry-date {
+.selected-date {
   color: #ff7a5c;
-  margin-right: 10px;
-  font-weight: bold;
+  font-size: 1.2rem;
+  font-weight: 500;
+  margin-bottom: 4px;
 }
 
-.entry-title {
-  font-weight: normal;
-  color: #555;
+.selected-type {
+  font-size: 1rem;
+  color: #666;
 }
 
 .entry-content-list {
   display: flex;
   flex-direction: column;
-  gap: 15px;
 }
 
 .entry-content-item {
   border-bottom: 1px solid #eee;
   padding-bottom: 15px;
+  margin-bottom: 15px;
 }
 
 .entry-content-item:last-child {
   border-bottom: none;
   padding-bottom: 0;
+  margin-bottom: 0;
 }
 
 .entry-content {
   line-height: 1.6;
   color: #333;
   white-space: pre-line;
+  font-size: 0.95rem;
+}
+
+.no-entry-message {
+  color: #999;
+  font-size: 0.95rem;
+  padding: 10px 0;
+  text-align: center;
+  font-style: italic;
 }
 
 .entry-actions {
@@ -997,8 +1004,8 @@
   border: 1px solid #ff7a5c;
   color: #ff7a5c;
   border-radius: 20px;
-  padding: 5px 12px;
-  font-size: 14px;
+  padding: 4px 12px;
+  font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -1073,48 +1080,78 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-.almanac-title {
-  margin-top: 0;
-  margin-bottom: 1rem;
-  font-size: 1.25rem;
-  font-weight: 500;
-}
-
 .almanac-content {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
 }
 
-.almanac-date {
+.almanac-date-header {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.almanac-solar-date {
+  font-size: 1.1rem;
+  color: #333;
+  margin-bottom: 0.5rem;
+}
+
+.almanac-lunar-date {
+  font-size: 1.5rem;
+  color: #ff3b30;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+.almanac-ganzhi {
   font-size: 0.9rem;
   color: #666;
-  margin-bottom: 0.5rem;
+}
+
+.almanac-divider {
+  height: 1px;
+  background-color: #eee;
+  margin: 1rem 0;
 }
 
 .almanac-yi, .almanac-ji {
   display: flex;
-  gap: 1rem;
+  margin-bottom: 1rem;
 }
 
-.almanac-label {
-  font-size: 1.25rem;
-  font-weight: bold;
-  color: #ff7a5c;
+.almanac-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.1rem;
+  margin-right: 1rem;
+  flex-shrink: 0;
+}
+
+.almanac-yi .almanac-circle {
+  background-color: #4cd964;
+  color: white;
+}
+
+.almanac-ji .almanac-circle {
+  background-color: #ff3b30;
+  color: white;
 }
 
 .almanac-items {
   font-size: 0.9rem;
-  color: #444;
-  line-height: 1.5;
-  flex: 1;
+  color: #333;
+  line-height: 1.6;
+  padding-top: 0.5rem;
 }
 
 .almanac-more {
   text-align: right;
-  margin-top: 0.5rem;
+  margin-top: 1rem;
 }
 
 .almanac-more a {
@@ -1123,6 +1160,6 @@
   font-size: 0.9rem;
 }
 
-.almanac-more a:hover {
-  text-decoration: underline;
+.icon-button svg path {
+  fill: #ff7a5c;
 }
