@@ -16,6 +16,9 @@ function App() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
   const fileInputRef = useRef(null);
+  // Add state for dynamic topics
+  const [dynamicTopics, setDynamicTopics] = useState([]);
+  const [isLoadingTopics, setIsLoadingTopics] = useState(false);
 
   const fetchEntries = async () => {
     try {
@@ -296,8 +299,8 @@ function App() {
     return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
   };
 
-  // 主题列表
-  const themes = [
+  // 主题列表 - 静态备用主题，当动态主题加载失败时使用
+  const staticThemes = [
     { id: 1, name: '健康日记' },
     { id: 2, name: '园艺工作' },
     { id: 3, name: '宠物' },
@@ -385,13 +388,27 @@ function App() {
   // 从服务器获取主题数据
   const fetchTopicThreads = async () => {
     try {
+      setIsLoadingTopics(true);
       const response = await fetch('http://localhost:3001/api/topic-threads');
       if (response.ok) {
         const data = await response.json();
         console.log('Topic threads fetched:', data);
-        // 这里可以处理服务器返回的主题数据
-        // 例如: setServerThemes(data.topics);
-        return data;
+        
+        // 处理服务器返回的主题数据
+        if (data && data.topics && data.topics.length > 0) {
+          // 将服务器返回的主题转换为UI可用的格式
+          const formattedTopics = data.topics.map((topic, index) => ({
+            id: `dynamic_${index}`,
+            name: topic.name,
+            category: topic.category,
+            summary: topic.summary,
+            progression: topic.progression,
+            mentions: topic.mentions
+          }));
+          
+          setDynamicTopics(formattedTopics);
+          return formattedTopics;
+        }
       } else {
         console.error('Failed to fetch topic threads');
         return null;
@@ -399,8 +416,15 @@ function App() {
     } catch (error) {
       console.error('Error fetching topic threads:', error);
       return null;
+    } finally {
+      setIsLoadingTopics(false);
     }
   };
+
+  // 在组件加载时获取主题
+  useEffect(() => {
+    fetchTopicThreads();
+  }, []);
 
   const handleThemeClick = (themeId) => {
     if (selectedTheme === themeId) {
@@ -410,7 +434,27 @@ function App() {
     } else {
       // Select the theme and show related entries
       setSelectedTheme(themeId);
-      setThemeRelatedEntries(themeEntryData[themeId] || []);
+      
+      // 检查是否是动态主题
+      if (themeId.toString().startsWith('dynamic_')) {
+        // 找到对应的动态主题
+        const topic = dynamicTopics.find(t => t.id === themeId);
+        if (topic && topic.mentions) {
+          // 将mentions转换为themeRelatedEntries格式
+          const relatedEntries = topic.mentions.map((mention, idx) => ({
+            id: `mention_${idx}`,
+            date: mention.date,
+            title: `${topic.name} - ${new Date(mention.date).toLocaleDateString()}`,
+            excerpt: mention.excerpt
+          }));
+          setThemeRelatedEntries(relatedEntries);
+        } else {
+          setThemeRelatedEntries([]);
+        }
+      } else {
+        // 使用静态主题数据
+        setThemeRelatedEntries(themeEntryData[themeId] || []);
+      }
     }
   };
 
@@ -642,25 +686,41 @@ function App() {
 
                 <div className="themes-section">
                   <h2>日记主题</h2>
-                  <div className="theme-tags">
-                    {themes.map(theme => (
-                      <div 
-                        key={theme.id} 
-                        className={`theme-tag ${selectedTheme === theme.id ? 'active' : ''}`}
-                        onClick={() => handleThemeClick(theme.id)}
-                      >
-                        {theme.name}
+                  {isLoadingTopics ? (
+                    <div className="loading-topics">正在加载主题...</div>
+                  ) : (
+                    <>
+                      <div className="theme-tags">
+                        {/* 优先显示动态主题，如果没有则显示静态主题 */}
+                        {(dynamicTopics.length > 0 ? dynamicTopics : staticThemes).map(theme => (
+                          <div 
+                            key={theme.id} 
+                            className={`theme-tag ${selectedTheme === theme.id ? 'active' : ''}`}
+                            onClick={() => handleThemeClick(theme.id)}
+                          >
+                            {theme.name}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                  <button className="add-theme-button">
-                    <span className="plus-icon">+</span>
-                    <span>添加主题</span>
-                  </button>
+                      <div className="theme-actions">
+                        <button className="add-theme-button">
+                          <span className="plus-icon">+</span>
+                          <span>添加主题</span>
+                        </button>
+                        <button 
+                          className="refresh-button"
+                          onClick={fetchTopicThreads}
+                          disabled={isLoadingTopics}
+                        >
+                          刷新主题
+                        </button>
+                      </div>
+                    </>
+                  )}
 
                   {selectedTheme && themeRelatedEntries.length > 0 && (
                     <div className="theme-related-entries">
-                      <h3>与"{themes.find(t => t.id === selectedTheme)?.name}"相关的日记片段</h3>
+                      <h3>与"{(dynamicTopics.length > 0 ? dynamicTopics : staticThemes).find(t => t.id === selectedTheme)?.name}"相关的日记片段</h3>
                       <div className="theme-entries-list">
                         {themeRelatedEntries.map(entry => (
                           <div key={entry.id} className="theme-entry-item">

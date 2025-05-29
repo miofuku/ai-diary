@@ -23,6 +23,9 @@ from typing import List, Optional
 # Load environment variables
 load_dotenv()
 
+# Config flags
+USE_AI_FOR_TOPICS = os.getenv("USE_AI_FOR_TOPICS", "true").lower() == "true"
+
 # Configure FastAPI app
 app = FastAPI()
 
@@ -83,32 +86,39 @@ graph_path = data_dir / 'topic_graph.json'
 # Enhanced ensure_data_file function with debugging
 def ensure_data_file():
     try:
-        # Make sure the directory exists
-        data_dir.mkdir(exist_ok=True)
+        # Check if data directory exists, create if not
+        if not data_dir.exists():
+            print(f"Creating data directory at {data_dir.absolute()}")
+            data_dir.mkdir(parents=True, exist_ok=True)
         
-        # Check if file exists, create it if not
+        # Check if entries file exists, create if not
+        entries_exist = False
+        graph_exists = False
+        
         if not data_path.exists():
             print(f"Creating new entries file at {data_path.absolute()}")
             with open(data_path, 'w') as f:
-                f.write('[]')
+                json.dump([], f)
         else:
-            # Verify the file is valid JSON
+            # Verify the entries file has content
             try:
                 with open(data_path, 'r') as f:
-                    json.load(f)
-                print(f"Data file exists and contains valid JSON at {data_path.absolute()}")
-            except json.JSONDecodeError:
-                print(f"Data file exists but contains invalid JSON. Resetting it.")
+                    entries = json.load(f)
+                    entries_exist = len(entries) > 0
+                print(f"Entries file exists at {data_path.absolute()}")
+                print(f"Entries found: {len(entries)}")
+            except (json.JSONDecodeError, KeyError):
+                print(f"Entries file exists but is invalid. Resetting it.")
                 with open(data_path, 'w') as f:
-                    f.write('[]')
-                    
-        # Ensure topics file exists
+                    json.dump([], f)
+        
+        # Check if topics file exists, create if not
         if not topics_path.exists():
             print(f"Creating new topics file at {topics_path.absolute()}")
             with open(topics_path, 'w') as f:
                 json.dump({"topics": [], "people": [], "relations": []}, f)
         
-        # Ensure graph file exists
+        # Check if graph file exists and has content
         if not graph_path.exists():
             print(f"Creating new topic graph file at {graph_path.absolute()}")
             graph = nx.Graph()
@@ -116,11 +126,65 @@ def ensure_data_file():
             graph_data = nx.node_link_data(graph)
             with open(graph_path, 'w') as f:
                 json.dump(graph_data, f)
+        else:
+            # Verify the graph file has content
+            try:
+                with open(graph_path, 'r') as f:
+                    graph_data = json.load(f)
+                    graph_exists = len(graph_data.get('nodes', [])) > 0
+                print(f"Graph file exists at {graph_path.absolute()}")
+                print(f"Graph nodes found: {len(graph_data.get('nodes', []))}")
+            except (json.JSONDecodeError, KeyError):
+                print(f"Graph file exists but is invalid. Resetting it.")
+                graph = nx.Graph()
+                graph_data = nx.node_link_data(graph)
+                with open(graph_path, 'w') as f:
+                    json.dump(graph_data, f)
+        
+        # If entries exist but no graph data, extract topics from existing entries
+        if entries_exist and not graph_exists and USE_AI_FOR_TOPICS:
+            print("Entries exist but no topic graph data found. Extracting topics from existing entries...")
+            # Process in background to avoid blocking startup
+            import threading
+            threading.Thread(target=process_existing_entries).start()
                 
     except Exception as e:
         print(f"Error ensuring data file: {e}")
         # Create an in-memory fallback if all else fails
         return []
+
+def process_existing_entries():
+    """Process all existing entries to extract topics and build the topic graph"""
+    try:
+        # Check if AI should be used for topic extraction
+        if not USE_AI_FOR_TOPICS:
+            print("AI topic extraction is disabled by configuration")
+            return
+        
+        # Load all entries
+        with open(data_path, 'r') as f:
+            entries = json.load(f)
+        
+        if not entries:
+            print("No entries to process")
+            return
+            
+        print(f"Processing {len(entries)} existing entries for topic extraction...")
+        
+        # Combine all entry content for bulk processing
+        combined_content = "\n\n".join([entry.get('content', '') for entry in entries])
+        
+        # Extract topics from combined content
+        topics_result = extract_topics(combined_content)
+        
+        # Save extracted topics
+        with open(topics_path, 'w') as f:
+            json.dump(topics_result, f, ensure_ascii=False, indent=2)
+            
+        print(f"Topic extraction complete. Found {len(topics_result.get('topics', []))} topics and {len(topics_result.get('people', []))} people.")
+        
+    except Exception as e:
+        print(f"Error processing existing entries: {e}")
 
 # Optimize text format using OpenAI
 def optimize_text(content: str) -> str:
@@ -162,6 +226,12 @@ def extract_topics(content: str) -> dict:
     
     try:
         print(f"Extracting topics from content ({len(content)} chars)")
+        
+        # Check if AI should be used for topic extraction
+        if not USE_AI_FOR_TOPICS:
+            print("AI topic extraction is disabled by configuration")
+            return {"topics": [], "people": [], "relations": []}
+        
         response = client.chat.completions.create(
             model="gpt-4o",  # Using GPT-4o for better entity recognition
             messages=[
@@ -473,9 +543,27 @@ async def create_entry(entry: EntryCreate):
             print(f"Error writing entries to file: {e}")
             raise
             
-        # Extract topics from the entry and update the topic graph
-        topics_data = extract_topics(optimized_content)
-        update_topic_graph(topics_data)
+        # Check if we should extract topics
+        should_extract = USE_AI_FOR_TOPICS
+        if should_extract:
+            # Check if graph file already has content
+            try:
+                with open(graph_path, 'r') as f:
+                    graph_data = json.load(f)
+                    # If we already have nodes, we can still extract for new entries
+                    if len(graph_data.get('nodes', [])) > 0:
+                        should_extract = USE_AI_FOR_TOPICS
+            except Exception:
+                # If there's an error reading the graph file, we should extract
+                should_extract = USE_AI_FOR_TOPICS
+            
+        # Extract topics from the entry and update the topic graph if needed
+        if should_extract:
+            print("Extracting topics from new entry...")
+            topics_data = extract_topics(optimized_content)
+            update_topic_graph(topics_data)
+        else:
+            print("Skipping topic extraction (AI usage disabled)")
         
         return new_entry
     except Exception as e:
@@ -566,9 +654,27 @@ async def update_entry(id: int, entry_update: EntryUpdate):
     with open(data_path, 'w') as f:
         json.dump(entries, f, indent=2)
     
-    # Extract topics from the updated entry and update the topic graph
-    topics_data = extract_topics(final_content)
-    update_topic_graph(topics_data)
+    # Check if we should extract topics
+    should_extract = USE_AI_FOR_TOPICS
+    if should_extract:
+        # Check if graph file has content
+        try:
+            with open(graph_path, 'r') as f:
+                graph_data = json.load(f)
+                # If we already have nodes, we can still extract for updated entries
+                if len(graph_data.get('nodes', [])) > 0:
+                    should_extract = USE_AI_FOR_TOPICS
+        except Exception:
+            # If there's an error reading the graph file, we should extract
+            should_extract = USE_AI_FOR_TOPICS
+        
+    # Extract topics from the updated entry and update the topic graph if needed
+    if should_extract:
+        print("Extracting topics from updated entry...")
+        topics_data = extract_topics(final_content)
+        update_topic_graph(topics_data)
+    else:
+        print("Skipping topic extraction (AI usage disabled)")
     
     return entries[entry_index]
 
@@ -646,6 +752,11 @@ def analyze_topic_threads(entries):
     if not entries:
         return {"topics": []}
     
+    # Check if AI should be used for topic extraction
+    if not USE_AI_FOR_TOPICS:
+        print("AI topic thread analysis is disabled by configuration")
+        return {"topics": []}
+    
     # Sort entries by date
     sorted_entries = sorted(entries, key=lambda e: e.get('createdAt', ''))
     
@@ -721,11 +832,10 @@ def analyze_topic_threads(entries):
         # Extract and parse the JSON response
         content = response.choices[0].message.content
         result = json.loads(content)
-        
         return result
     except Exception as e:
-        print(f"Error calling OpenAI API: {str(e)}")
-        raise Exception(f"Failed to analyze entries with OpenAI: {str(e)}")
+        print(f"Error analyzing topic threads: {e}")
+        return {"topics": []}
 
 # Extract topics from text endpoint
 @app.post("/api/extract-topics")
@@ -734,6 +844,10 @@ async def extract_topics_endpoint():
     Extract topics from diary entries and update the topic graph
     """
     try:
+        # Check if AI should be used for topic extraction
+        if not USE_AI_FOR_TOPICS:
+            return {"status": "disabled", "message": "AI topic extraction is disabled by configuration"}
+        
         # Ensure the data files exist
         ensure_data_file()
         
@@ -776,6 +890,11 @@ async def extract_topics(entries):
     Extract topics from diary entries using OpenAI
     """
     if not entries:
+        return {"topics": [], "people": [], "relations": []}
+    
+    # Check if AI should be used for topic extraction
+    if not USE_AI_FOR_TOPICS:
+        print("AI topic extraction is disabled by configuration")
         return {"topics": [], "people": [], "relations": []}
     
     # Sort entries by date
@@ -915,47 +1034,101 @@ class Query:
         ensure_data_file()
         
         try:
-            # Load graph from file
-            with open(graph_path, 'r') as f:
-                graph_data = json.load(f)
-            
-            # Convert to GraphQL types
             topics = []
             people = []
-            
-            for node in graph_data.get('nodes', []):
-                node_id = node.get('id', '')
-                node_type = node.get('type', '')
-                
-                if node_type == 'topic':
-                    topics.append(TopicNodeType(
-                        id=node_id,
-                        name=node.get('name', ''),
-                        type=node_type,
-                        category=node.get('category', 'activities'),
-                        topic_type=node.get('topicType', 'general'),
-                        importance=node.get('importance', 3),
-                        sentiment=node.get('sentiment', 0),
-                        context=node.get('context', '')
-                    ))
-                elif node_type == 'person':
-                    people.append(PersonNodeType(
-                        id=node_id,
-                        name=node.get('name', ''),
-                        type=node_type,
-                        category='people',
-                        role=node.get('role', ''),
-                        importance=node.get('importance', 3)
-                    ))
-            
             relations = []
-            for edge in graph_data.get('edges', []):
-                relations.append(RelationEdgeType(
-                    source=edge.get('source', ''),
-                    target=edge.get('target', ''),
-                    type=edge.get('type', 'related_to'),
-                    strength=edge.get('strength', 3)
-                ))
+            
+            # First try to load from the graph file (network graph format)
+            try:
+                with open(graph_path, 'r') as f:
+                    graph_data = json.load(f)
+                    
+                # Check if the graph has nodes
+                if len(graph_data.get('nodes', [])) > 0:
+                    print("Loading topics from graph file...")
+                    
+                    # Convert to GraphQL types
+                    for node in graph_data.get('nodes', []):
+                        node_id = node.get('id', '')
+                        node_type = node.get('type', '')
+                        
+                        if node_type == 'topic':
+                            topics.append(TopicNodeType(
+                                id=node_id,
+                                name=node.get('name', ''),
+                                type=node_type,
+                                category=node.get('category', 'activities'),
+                                topic_type=node.get('topicType', 'general'),
+                                importance=node.get('importance', 3),
+                                sentiment=node.get('sentiment', 0),
+                                context=node.get('context', '')
+                            ))
+                        elif node_type == 'person':
+                            people.append(PersonNodeType(
+                                id=node_id,
+                                name=node.get('name', ''),
+                                type=node_type,
+                                category='people',
+                                role=node.get('role', ''),
+                                importance=node.get('importance', 3)
+                            ))
+                    
+                    # Load relations from edges
+                    for edge in graph_data.get('edges', []):
+                        relations.append(RelationEdgeType(
+                            source=edge.get('source', ''),
+                            target=edge.get('target', ''),
+                            type=edge.get('type', 'related_to'),
+                            strength=edge.get('strength', 3)
+                        ))
+                else:
+                    # If graph is empty, try loading from topics file
+                    raise FileNotFoundError("Graph file has no nodes")
+            except Exception as graph_error:
+                print(f"Could not load from graph file: {graph_error}")
+                
+                # Try to load from the topics file (direct extraction format)
+                try:
+                    print("Loading topics from topics file...")
+                    with open(topics_path, 'r') as f:
+                        topics_data = json.load(f)
+                    
+                    # Convert topics to GraphQL types
+                    for topic in topics_data.get('topics', []):
+                        topics.append(TopicNodeType(
+                            id=topic.get('id', ''),
+                            name=topic.get('name', ''),
+                            type='topic',
+                            category=topic.get('category', 'activities'),
+                            topic_type=topic.get('type', 'concept'),
+                            importance=topic.get('importance', 3),
+                            sentiment=topic.get('sentiment', 0),
+                            context=topic.get('context', '')
+                        ))
+                    
+                    # Convert people to GraphQL types
+                    for person in topics_data.get('people', []):
+                        people.append(PersonNodeType(
+                            id=person.get('id', ''),
+                            name=person.get('name', ''),
+                            type='person',
+                            category='people',
+                            role=person.get('role', ''),
+                            importance=person.get('importance', 3)
+                        ))
+                    
+                    # Convert relations to GraphQL types
+                    for relation in topics_data.get('relations', []):
+                        relations.append(RelationEdgeType(
+                            source=relation.get('source', ''),
+                            target=relation.get('target', ''),
+                            type=relation.get('type', 'related_to'),
+                            strength=relation.get('strength', 3)
+                        ))
+                except Exception as topics_error:
+                    print(f"Could not load from topics file: {topics_error}")
+                    # Both files failed, return empty data
+                    return TopicGraphType(topics=[], people=[], relations=[])
             
             return TopicGraphType(topics=topics, people=people, relations=relations)
         except Exception as e:
@@ -970,6 +1143,35 @@ graphql_app = GraphQLRouter(schema)
 
 # Add GraphQL endpoints to the app
 app.include_router(graphql_app, prefix="/graphql")
+
+# Add a new endpoint to toggle AI usage for topic extraction
+@app.post("/api/toggle-ai-topics")
+async def toggle_ai_topics(enable: bool = True):
+    """
+    Enable or disable AI usage for topic extraction
+    """
+    global USE_AI_FOR_TOPICS
+    
+    # Update the flag
+    USE_AI_FOR_TOPICS = enable
+    
+    # Return the current status
+    return {
+        "status": "success",
+        "ai_topics_enabled": USE_AI_FOR_TOPICS,
+        "message": f"AI topic extraction {'enabled' if USE_AI_FOR_TOPICS else 'disabled'}"
+    }
+
+# Add a new endpoint to check AI usage status for topic extraction
+@app.get("/api/ai-topics-status")
+async def ai_topics_status():
+    """
+    Get the current status of AI usage for topic extraction
+    """
+    return {
+        "ai_topics_enabled": USE_AI_FOR_TOPICS,
+        "message": f"AI topic extraction is currently {'enabled' if USE_AI_FOR_TOPICS else 'disabled'}"
+    }
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3001) 
