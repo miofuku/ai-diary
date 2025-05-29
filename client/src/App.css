@@ -460,16 +460,20 @@
 
 .edit-pane, .preview-pane {
   flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .markdown-preview {
   border: 1px solid #eaeaea;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 1rem;
-  min-height: 150px;
+  min-height: 250px;
+  height: 100%;
   background-color: #f9f9f9;
   overflow-y: auto;
   line-height: 1.6;
+  box-sizing: border-box;
 }
 
 .markdown-preview h1, 
@@ -704,4 +708,15 @@
 
 .icon-button svg path {
   fill: #ff7a5c;
+}
+
+.almanac-more {
+  text-align: right;
+  margin-top: 1rem;
+}
+
+.almanac-more a {
+  color: #ff7a5c;
+  text-decoration: none;
+  font-size: 0.9rem;
 }
