@@ -497,7 +497,8 @@ function App() {
         <main className="content-container">
           <div className="content-inner">
             <div className="page-header">
-              <h1>{activeTab === 'home' ? '首页' : 
+              <h1>{
+                  activeTab === 'home' ? '首页' : 
                   activeTab === 'diary' ? '日记' : 
                   '日历'}</h1>
             </div>
@@ -521,44 +522,91 @@ function App() {
               </div>
             )}
 
+            {/* Edit form - keep this outside tab content as it's modal-like */}
+            {editingEntryId && (
+              <div className="edit-form">
+                <div className="edit-header">
+                  <h2>编辑日记</h2>
+                </div>
+                <div className="markdown-toolbar">
+                  <button type="button" onClick={() => insertFormatting('bold')} title="Bold">
+                    <strong>B</strong>
+                  </button>
+                  <button type="button" onClick={() => insertFormatting('italic')} title="Italic">
+                    <em>I</em>
+                  </button>
+                  <button type="button" onClick={() => insertFormatting('heading')} title="Heading">
+                    H
+                  </button>
+                  <button type="button" onClick={() => insertFormatting('list')} title="List">
+                    • List
+                  </button>
+                </div>
+                
+                <div className="edit-container">
+                  <div className="edit-pane">
+                    <textarea
+                      id="edit-textarea"
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      placeholder="编辑日记内容..."
+                      className="diary-textarea"
+                    />
+                  </div>
+                  
+                  <div className="preview-pane">
+                    <div className="markdown-preview" dangerouslySetInnerHTML={renderMarkdown(editContent)} />
+                  </div>
+                </div>
+                
+                <div className="button-group">
+                  <button type="button" onClick={saveEditedEntry} className="save-button">
+                    保存更改
+                  </button>
+                  <button type="button" onClick={cancelEditing} className="cancel-button">
+                    取消
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Home tab content */}
-            {activeTab === 'home' && (
+            {activeTab === 'home' && !editingEntryId && (
               <>
-                {!editingEntryId && (
-                  <div className="input-card">
-                    <form onSubmit={handleSubmit} className="diary-form">
-                      <textarea
-                        value={content}
-                        onChange={(e) => setContent(e.target.value)}
-                        placeholder="写下你的想法..."
-                        className="diary-textarea"
-                      />
-                      
-                      <div className="input-toolbar">
-                        <div className="toolbar-icons">
-                          <button type="button" className="icon-button">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2ZM18 20H6V4H13V9H18V20ZM8 16H16V18H8V16ZM8 12H16V14H8V12Z" fill="#666"/>
-                            </svg>
-                          </button>
-                          <button type="button" className="icon-button">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path d="M19 5V19H5V5H19ZM19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3ZM14.14 11.86L11.14 15.73L9 13.14L6 17H18L14.14 11.86Z" fill="#666"/>
-                            </svg>
-                          </button>
-                          <button type="button" className="icon-button">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" fill="#666"/>
-                            </svg>
-                          </button>
-                        </div>
-                        <button type="submit" disabled={!content.trim()} className="save-button">
-                          保存日记
+                {/* Input form for new entries */}
+                <div className="input-card">
+                  <form onSubmit={handleSubmit} className="diary-form">
+                    <textarea
+                      value={content}
+                      onChange={(e) => setContent(e.target.value)}
+                      placeholder="写下你的想法..."
+                      className="diary-textarea"
+                    />
+                    
+                    <div className="input-toolbar">
+                      <div className="toolbar-icons">
+                        <button type="button" className="icon-button">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2ZM18 20H6V4H13V9H18V20ZM8 16H16V18H8V16ZM8 12H16V14H8V12Z" fill="#666"/>
+                          </svg>
+                        </button>
+                        <button type="button" className="icon-button">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M19 5V19H5V5H19ZM19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3ZM14.14 11.86L11.14 15.73L9 13.14L6 17H18L14.14 11.86Z" fill="#666"/>
+                          </svg>
+                        </button>
+                        <button type="button" className="icon-button">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" fill="#666"/>
+                          </svg>
                         </button>
                       </div>
-                    </form>
-                  </div>
-                )}
+                      <button type="submit" disabled={!content.trim()} className="save-button">
+                        保存日记
+                      </button>
+                    </div>
+                  </form>
+                </div>
                 
                 {/* Selected Date Entry Display */}
                 <div className="selected-date-entry">
@@ -637,54 +685,6 @@ function App() {
                   )}
                 </div>
               </>
-            )}
-
-            {/* Edit form - keep this outside tab content as it's modal-like */}
-            {editingEntryId && (
-              <div className="edit-form">
-                <div className="edit-header">
-                  <h2>编辑日记</h2>
-                </div>
-                <div className="markdown-toolbar">
-                  <button type="button" onClick={() => insertFormatting('bold')} title="Bold">
-                    <strong>B</strong>
-                  </button>
-                  <button type="button" onClick={() => insertFormatting('italic')} title="Italic">
-                    <em>I</em>
-                  </button>
-                  <button type="button" onClick={() => insertFormatting('heading')} title="Heading">
-                    H
-                  </button>
-                  <button type="button" onClick={() => insertFormatting('list')} title="List">
-                    • List
-                  </button>
-                </div>
-                
-                <div className="edit-container">
-                  <div className="edit-pane">
-                    <textarea
-                      id="edit-textarea"
-                      value={editContent}
-                      onChange={(e) => setEditContent(e.target.value)}
-                      placeholder="编辑日记内容..."
-                      className="diary-textarea"
-                    />
-                  </div>
-                  
-                  <div className="preview-pane">
-                    <div className="markdown-preview" dangerouslySetInnerHTML={renderMarkdown(editContent)} />
-                  </div>
-                </div>
-                
-                <div className="button-group">
-                  <button type="button" onClick={saveEditedEntry} className="save-button">
-                    保存更改
-                  </button>
-                  <button type="button" onClick={cancelEditing} className="cancel-button">
-                    取消
-                  </button>
-                </div>
-              </div>
             )}
           </div>
         </main>

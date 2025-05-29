@@ -147,6 +147,20 @@
   box-sizing: border-box;
 }
 
+#edit-textarea {
+  width: 100%;
+  min-height: 300px;
+  padding: 1rem;
+  border: 1px solid #eaeaea;
+  border-radius: 8px;
+  resize: vertical;
+  font-size: 1rem;
+  line-height: 1.5;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
 .diary-textarea {
   width: 100%;
   min-height: 80px;
@@ -417,12 +431,14 @@
 
 .edit-header {
   margin-bottom: 1rem;
+  border-bottom: 2px solid #ff7a5c;
+  padding-bottom: 0.5rem;
 }
 
 .edit-header h2 {
   margin: 0;
   font-size: 1.25rem;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .markdown-toolbar {
@@ -462,13 +478,14 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 300px;
 }
 
 .markdown-preview {
   border: 1px solid #eaeaea;
   border-radius: 8px;
   padding: 1rem;
-  min-height: 250px;
+  min-height: 300px;
   height: 100%;
   background-color: #f9f9f9;
   overflow-y: auto;
