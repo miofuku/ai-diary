@@ -1,0 +1,305 @@
+.topic-diaries-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  background-color: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+/* Left sidebar styles */
+.topic-sidebar {
+  width: 250px;
+  background-color: #fff;
+  padding: 20px;
+  border-right: 1px solid #eaeaea;
+  overflow-y: auto;
+}
+
+.topic-sidebar h2 {
+  font-size: 1.3rem;
+  margin-bottom: 20px;
+  color: #333;
+  text-align: center;
+}
+
+.topic-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.topic-item {
+  padding: 12px 15px;
+  border-radius: 6px;
+  background-color: #f5f5f5;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.95rem;
+  color: #555;
+}
+
+.topic-item:hover {
+  background-color: #f5f5f5;
+  transform: translateY(-2px);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+}
+
+.topic-item.active {
+  background-color: #ffebeb;
+  color: #ff4d4f;
+  border-left: 3px solid #ff4d4f;
+  font-weight: 500;
+}
+
+/* Right content styles */
+.topic-entries-content {
+  flex: 1;
+  padding: 25px;
+  overflow-y: auto;
+}
+
+.topic-entries-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.topic-entries-header h2 {
+  font-size: 1.3rem;
+  color: #333;
+  margin: 0;
+}
+
+.sort-button {
+  background-color: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 20px;
+  padding: 6px 16px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #555;
+  transition: all 0.2s;
+}
+
+.sort-button:hover {
+  background-color: #fff0f0;
+  border-color: #ffb3b3;
+}
+
+.loading-message,
+.no-entries-message,
+.select-topic-message {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+  color: #888;
+  font-size: 1rem;
+  background-color: #fafafa;
+  border-radius: 6px;
+  border: 1px dashed #e0e0e0;
+}
+
+/* Topic entries list styles */
+.topic-entries-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.topic-entry-item {
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  padding: 1.25rem;
+  border: none;
+  transition: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  margin-bottom: 1rem;
+}
+
+.topic-entry-item:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.topic-entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.topic-entry-date {
+  color: #ff4d4f;
+  font-size: 0.875rem;
+  font-weight: normal;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.topic-entry-excerpt {
+  color: #333;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  max-height: none;
+  overflow: visible;
+  position: relative;
+}
+
+.topic-entry-excerpt .highlight {
+  background-color: #fff2f0;
+  color: #ff4d4f;
+  padding: 0 3px;
+  border-radius: 2px;
+  font-weight: normal;
+}
+
+/* Pagination styles */
+.pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: 30px;
+  gap: 8px;
+}
+
+.page-button {
+  min-width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  background-color: #fff;
+  border: 1px solid #d9d9d9;
+  color: #666;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.page-button:hover {
+  border-color: #ff4d4f;
+  color: #ff4d4f;
+}
+
+.page-button.active {
+  background-color: #ff4d4f;
+  border-color: #ff4d4f;
+  color: #fff;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .topic-diaries-container {
+    flex-direction: column;
+  }
+  
+  .topic-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #e0e0e0;
+    max-height: 200px;
+  }
+}
+
+.back-button {
+  margin-top: 20px;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  padding: 8px 16px;
+  color: #555;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+  text-align: center;
+}
+
+.back-button:hover {
+  background-color: #fff0f0;
+  color: #ff4d4f;
+  border-color: #ffb3b3;
+}
+
+.sort-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sort-toggle span {
+  font-size: 0.85rem;
+  color: #888;
+}
+
+.sort-toggle span.active {
+  color: #ff4d4f;
+  font-weight: 500;
+}
+
+/* The switch - the box around the slider */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+}
+
+/* Hide default HTML checkbox */
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* The slider */
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: #ff4d4f;
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px #ff4d4f;
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+/* Rounded sliders */
+.slider.round {
+  border-radius: 20px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+} 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './App.css';
 import DiaryCalendar from './components/DiaryCalendar';
+import TopicDiaries from './components/TopicDiaries';
 
 function App() {
   const [entries, setEntries] = useState([]);
@@ -27,6 +28,20 @@ function App() {
   const [themeCurrentPage, setThemeCurrentPage] = useState(1);
   const [themeEntriesPerPage] = useState(3);
   const [themeSortNewestFirst, setThemeSortNewestFirst] = useState(true);
+  // Add state for topic diaries view
+  const [showTopicDiaries, setShowTopicDiaries] = useState(false);
+  
+  // Static themes data
+  const staticThemes = [
+    { id: 1, name: '健康' },
+    { id: 2, name: '园艺' },
+    { id: 3, name: '宠物' },
+    { id: 4, name: '工作' },
+    { id: 5, name: '旅行' },
+    { id: 6, name: '阅读' },
+    { id: 7, name: '电影' },
+    { id: 8, name: '食物' }
+  ];
 
   const fetchEntries = async () => {
     try {
@@ -308,16 +323,6 @@ function App() {
     if (!date) return '';
     return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
   };
-
-  // 主题列表 - 静态备用主题，当动态主题加载失败时使用
-  const staticThemes = [
-    { id: 1, name: '健康日记' },
-    { id: 2, name: '园艺工作' },
-    { id: 3, name: '宠物' },
-    { id: 4, name: '工作项目' },
-    { id: 5, name: '阅读笔记' },
-    { id: 6, name: '旅行' }
-  ];
 
   // 模拟主题相关的日记数据
   const themeEntryData = {
@@ -674,6 +679,14 @@ function App() {
   // Change page
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
+  // Handle "查看全部相关日记" button click
+  const handleViewAllTopicEntries = () => {
+    if (selectedTheme) {
+      setActiveTab('diary');
+      setShowTopicDiaries(true);
+    }
+  };
+
   return (
     <div className="App">
       <header className="app-header">
@@ -908,12 +921,18 @@ function App() {
                     <div className="theme-related-entries">
                       <div className="theme-entries-header">
                         <h3>与"{(dynamicTopics.length > 0 ? dynamicTopics : staticThemes).find(t => t.id === selectedTheme)?.name}"相关的日记片段</h3>
-                        <button 
-                          className={`theme-sort-button ${!themeSortNewestFirst ? 'active' : ''}`}
-                          onClick={toggleThemeSortOrder}
-                        >
-                          {themeSortNewestFirst ? '从最早的开始' : '从最新的开始'}
-                        </button>
+                        <div className="sort-toggle">
+                          <span className={!themeSortNewestFirst ? 'active' : ''}>最早</span>
+                          <label className="switch">
+                            <input 
+                              type="checkbox" 
+                              checked={themeSortNewestFirst}
+                              onChange={toggleThemeSortOrder}
+                            />
+                            <span className="slider round"></span>
+                          </label>
+                          <span className={themeSortNewestFirst ? 'active' : ''}>最新</span>
+                        </div>
                       </div>
                       <div className="theme-entries-list">
                         {getCurrentThemeEntries().map(entry => (
@@ -945,11 +964,93 @@ function App() {
                       )}
                       
                       <div className="view-all-container">
-                        <button className="view-all-button">查看全部相关日记</button>
+                        <button 
+                          className="view-all-button"
+                          onClick={handleViewAllTopicEntries}
+                        >
+                          查看全部相关日记
+                        </button>
                       </div>
                     </div>
                   )}
                 </div>
+              </>
+            )}
+
+            {/* Diary tab content */}
+            {activeTab === 'diary' && !editingEntryId && (
+              <>
+                {showTopicDiaries ? (
+                  <TopicDiaries 
+                    topics={dynamicTopics.length > 0 ? dynamicTopics : staticThemes}
+                    selectedTopicId={selectedTheme}
+                    onTopicSelect={(topicId) => setSelectedTheme(topicId)}
+                    onBack={() => setShowTopicDiaries(false)}
+                  />
+                ) : (
+                  <div className="selected-date-entry">
+                    <div className="selected-date-header">
+                      <div className="selected-date">{formatDate(selectedDate)}</div>
+                      <div className="sort-toggle">
+                        <span className={!sortNewestFirst ? 'active' : ''}>最早</span>
+                        <label className="switch">
+                          <input 
+                            type="checkbox" 
+                            checked={sortNewestFirst}
+                            onChange={() => {
+                              setSortNewestFirst(!sortNewestFirst);
+                              setCurrentPage(1); // Reset to first page when changing sort order
+                            }}
+                          />
+                          <span className="slider round"></span>
+                        </label>
+                        <span className={sortNewestFirst ? 'active' : ''}>最新</span>
+                      </div>
+                    </div>
+                    
+                    {filteredEntries.length > 0 ? (
+                      <>
+                        <div className="entry-content-list">
+                          {getCurrentEntries().map((entry) => (
+                            <div key={entry.id} className="entry-content-item">
+                              <div 
+                                className="entry-content"
+                                dangerouslySetInnerHTML={renderMarkdown(entry.content)}
+                              />
+                              <div className="entry-actions">
+                                <button 
+                                  onClick={() => startEditing(entry)} 
+                                  className="edit-button"
+                                >
+                                  编辑
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        {/* Pagination */}
+                        {filteredEntries.length > entriesPerPage && (
+                          <div className="pagination">
+                            {Array.from({ length: Math.ceil(filteredEntries.length / entriesPerPage) }).map((_, index) => (
+                              <button
+                                key={index}
+                                onClick={() => paginate(index + 1)}
+                                className={`page-button ${currentPage === index + 1 ? 'active' : ''}`}
+                              >
+                                {index + 1}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="no-entry-message">
+                        这一天还没有日记内容
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
