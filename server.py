@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union, Annotated
 import uvicorn
 import tempfile
 import os
@@ -876,7 +876,7 @@ async def extract_topics(entries):
 
 # GraphQL schema definition
 @strawberry.type
-class TopicNode:
+class TopicNodeType:
     id: str
     name: str
     type: str
@@ -887,38 +887,31 @@ class TopicNode:
     context: Optional[str] = None
 
 @strawberry.type
-class PersonNode:
+class PersonNodeType:
     id: str
     name: str
     type: str
-    category: str = "people"
+    category: str
     role: Optional[str] = None
     importance: Optional[int] = None
 
 @strawberry.type
-class RelationEdge:
+class RelationEdgeType:
     source: str
     target: str
     type: str
     strength: Optional[int] = None
 
-# Define the Node union type separately
-Node = strawberry.union("Node", (TopicNode, PersonNode))
-
 @strawberry.type
-class TopicGraph:
-    @strawberry.field
-    def nodes(self) -> "list":
-        return []
-        
-    @strawberry.field
-    def edges(self) -> "list":
-        return []
+class TopicGraphType:
+    topics: List[TopicNodeType]
+    people: List[PersonNodeType]
+    relations: List[RelationEdgeType]
 
 @strawberry.type
 class Query:
     @strawberry.field
-    def topic_graph(self) -> "TopicGraph":
+    def topic_graph(self) -> TopicGraphType:
         ensure_data_file()
         
         try:
@@ -926,17 +919,16 @@ class Query:
             with open(graph_path, 'r') as f:
                 graph_data = json.load(f)
             
-            # Create a new TopicGraph instance
-            graph = TopicGraph()
-            
             # Convert to GraphQL types
-            nodes = []
+            topics = []
+            people = []
+            
             for node in graph_data.get('nodes', []):
                 node_id = node.get('id', '')
                 node_type = node.get('type', '')
                 
                 if node_type == 'topic':
-                    nodes.append(TopicNode(
+                    topics.append(TopicNodeType(
                         id=node_id,
                         name=node.get('name', ''),
                         type=node_type,
@@ -947,7 +939,7 @@ class Query:
                         context=node.get('context', '')
                     ))
                 elif node_type == 'person':
-                    nodes.append(PersonNode(
+                    people.append(PersonNodeType(
                         id=node_id,
                         name=node.get('name', ''),
                         type=node_type,
@@ -956,25 +948,19 @@ class Query:
                         importance=node.get('importance', 3)
                     ))
             
-            # Override the nodes method
-            graph.nodes = lambda: nodes
-            
-            edges = []
+            relations = []
             for edge in graph_data.get('edges', []):
-                edges.append(RelationEdge(
+                relations.append(RelationEdgeType(
                     source=edge.get('source', ''),
                     target=edge.get('target', ''),
                     type=edge.get('type', 'related_to'),
                     strength=edge.get('strength', 3)
                 ))
             
-            # Override the edges method
-            graph.edges = lambda: edges
-            
-            return graph
+            return TopicGraphType(topics=topics, people=people, relations=relations)
         except Exception as e:
             print(f"Error fetching topic graph: {e}")
-            return TopicGraph()
+            return TopicGraphType(topics=[], people=[], relations=[])
 
 # Create GraphQL schema
 schema = strawberry.Schema(query=Query)
