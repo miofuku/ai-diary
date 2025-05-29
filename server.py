@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Body
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Body, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -19,6 +19,7 @@ import strawberry
 from strawberry.fastapi import GraphQLRouter
 import networkx as nx
 from typing import List, Optional
+import re
 
 # Load environment variables
 load_dotenv()
@@ -1031,6 +1032,9 @@ class TopicGraphType:
 class Query:
     @strawberry.field
     def topic_graph(self) -> TopicGraphType:
+        """
+        Loads the topic graph data from the stored files without using AI processing
+        """
         ensure_data_file()
         
         try:
@@ -1038,7 +1042,7 @@ class Query:
             people = []
             relations = []
             
-            # First try to load from the graph file (network graph format)
+            # Try to load from the graph file (network graph format)
             try:
                 with open(graph_path, 'r') as f:
                     graph_data = json.load(f)
@@ -1047,8 +1051,37 @@ class Query:
                 if len(graph_data.get('nodes', [])) > 0:
                     print("Loading topics from graph file...")
                     
-                    # Convert to GraphQL types
+                    # Process nodes to remove duplicates and merge similar topics
+                    processed_nodes = {}
+                    
+                    # First pass: gather all nodes by normalized name
                     for node in graph_data.get('nodes', []):
+                        node_id = node.get('id', '')
+                        node_name = node.get('name', '').strip()
+                        node_type = node.get('type', '')
+                        
+                        # Skip empty nodes
+                        if not node_name:
+                            continue
+                        
+                        # Create a normalized version of the name for comparison
+                        normalized_name = node_name.lower()
+                        
+                        # If we already have this node, see which one to keep
+                        if normalized_name in processed_nodes:
+                            existing = processed_nodes[normalized_name]
+                            # Keep the one with more information
+                            if len(node.get('context', '')) > len(existing.get('context', '')):
+                                processed_nodes[normalized_name] = node
+                            # If both have the same amount of info, keep the one with higher importance
+                            elif len(node.get('context', '')) == len(existing.get('context', '')) and \
+                                 node.get('importance', 0) > existing.get('importance', 0):
+                                processed_nodes[normalized_name] = node
+                        else:
+                            processed_nodes[normalized_name] = node
+                    
+                    # Second pass: convert to GraphQL types
+                    for node in processed_nodes.values():
                         node_id = node.get('id', '')
                         node_type = node.get('type', '')
                         
@@ -1073,14 +1106,21 @@ class Query:
                                 importance=node.get('importance', 3)
                             ))
                     
-                    # Load relations from edges
+                    # Load relations from edges, updating any references to merged nodes
+                    node_ids = {node.id for node in topics + people}
+                    
                     for edge in graph_data.get('edges', []):
-                        relations.append(RelationEdgeType(
-                            source=edge.get('source', ''),
-                            target=edge.get('target', ''),
-                            type=edge.get('type', 'related_to'),
-                            strength=edge.get('strength', 3)
-                        ))
+                        source = edge.get('source', '')
+                        target = edge.get('target', '')
+                        
+                        # Only include relations where both source and target exist
+                        if source in node_ids and target in node_ids:
+                            relations.append(RelationEdgeType(
+                                source=source,
+                                target=target,
+                                type=edge.get('type', 'related_to'),
+                                strength=edge.get('strength', 3)
+                            ))
                 else:
                     # If graph is empty, try loading from topics file
                     raise FileNotFoundError("Graph file has no nodes")
@@ -1145,33 +1185,125 @@ graphql_app = GraphQLRouter(schema)
 app.include_router(graphql_app, prefix="/graphql")
 
 # Add a new endpoint to toggle AI usage for topic extraction
-@app.post("/api/toggle-ai-topics")
-async def toggle_ai_topics(enable: bool = True):
-    """
-    Enable or disable AI usage for topic extraction
-    """
+@app.get("/api/toggle-ai-topics")
+async def toggle_ai_topics(enable: Optional[bool] = None):
+    """Toggle whether AI should be used for topic extraction"""
     global USE_AI_FOR_TOPICS
     
-    # Update the flag
-    USE_AI_FOR_TOPICS = enable
+    if enable is not None:
+        USE_AI_FOR_TOPICS = enable
+        print(f"AI for topics has been {'enabled' if enable else 'disabled'}")
+        return {"status": "success", "aiEnabled": USE_AI_FOR_TOPICS}
     
-    # Return the current status
-    return {
-        "status": "success",
-        "ai_topics_enabled": USE_AI_FOR_TOPICS,
-        "message": f"AI topic extraction {'enabled' if USE_AI_FOR_TOPICS else 'disabled'}"
-    }
+    # If no parameter provided, just return current status
+    return {"status": "success", "aiEnabled": USE_AI_FOR_TOPICS}
 
-# Add a new endpoint to check AI usage status for topic extraction
 @app.get("/api/ai-topics-status")
 async def ai_topics_status():
+    """Return the current status of AI for topic extraction"""
+    return {"aiEnabled": USE_AI_FOR_TOPICS}
+
+# Add a new endpoint to find entries related to a specific topic
+@app.get("/api/topic-entries/{topic_id}")
+async def get_topic_entries(topic_id: str):
     """
-    Get the current status of AI usage for topic extraction
+    Find all diary entries that mention a specific topic using pattern matching
     """
-    return {
-        "ai_topics_enabled": USE_AI_FOR_TOPICS,
-        "message": f"AI topic extraction is currently {'enabled' if USE_AI_FOR_TOPICS else 'disabled'}"
-    }
+    try:
+        ensure_data_file()
+        
+        # Load the topic information from the graph
+        topic_name = None
+        topic_related_terms = []
+        
+        # Load the graph data
+        with open(graph_path, 'r') as f:
+            graph_data = json.load(f)
+            
+        # Find the topic by ID
+        for node in graph_data.get('nodes', []):
+            if node.get('id') == topic_id:
+                topic_name = node.get('name')
+                # Add the topic name and any related terms
+                topic_related_terms.append(topic_name.lower())
+                # Add common variations of the name
+                if 'context' in node and node['context']:
+                    # Extract potential related terms from context
+                    context_words = node['context'].lower().replace(',', ' ').replace('.', ' ').split()
+                    # Filter for meaningful words (more than 2 characters)
+                    context_terms = [word for word in context_words if len(word) > 2]
+                    topic_related_terms.extend(context_terms)
+                break
+        
+        if not topic_name:
+            return {"status": "error", "message": f"Topic with ID {topic_id} not found"}
+        
+        # Get all entries from the data file
+        with open(data_path, 'r') as f:
+            entries = json.load(f)
+        
+        related_entries = []
+        
+        # Find entries that mention the topic or related terms
+        for entry in entries:
+            content = entry.get('content', '').lower()
+            entry_date = entry.get('createdAt', '')
+            
+            # Check if the entry mentions the topic or related terms
+            if any(term in content for term in topic_related_terms):
+                # Format the date
+                try:
+                    date_obj = datetime.fromisoformat(entry_date)
+                    formatted_date = date_obj.strftime('%Y-%m-%d')
+                except (ValueError, TypeError):
+                    formatted_date = entry_date.split('T')[0] if 'T' in entry_date else entry_date
+                
+                # Find the most relevant excerpt - a sentence containing the topic name
+                excerpt = content
+                if len(excerpt) > 150:
+                    # Try to find a sentence containing the topic name
+                    sentences = re.split(r'(?<=[.!?])\s+', content)
+                    matching_sentences = []
+                    
+                    for sentence in sentences:
+                        if any(term in sentence.lower() for term in topic_related_terms):
+                            matching_sentences.append(sentence)
+                    
+                    if matching_sentences:
+                        # Use the first matching sentence as the excerpt
+                        excerpt = matching_sentences[0]
+                        if len(excerpt) > 150:
+                            excerpt = excerpt[:147] + '...'
+                    else:
+                        # If no sentence contains the topic, use the first 150 characters
+                        excerpt = content[:147] + '...'
+                
+                # Highlight the topic name in the excerpt
+                highlighted_excerpt = excerpt
+                for term in topic_related_terms:
+                    if term in excerpt.lower():
+                        # Using regex to do case-insensitive replacement while preserving case
+                        pattern = re.compile(re.escape(term), re.IGNORECASE)
+                        highlighted_excerpt = pattern.sub(lambda m: f'<span class="highlight">{m.group(0)}</span>', highlighted_excerpt)
+                
+                related_entries.append({
+                    'id': entry.get('id'),
+                    'date': formatted_date,
+                    'title': f"{topic_name} - {formatted_date}",
+                    'excerpt': highlighted_excerpt
+                })
+        
+        # Sort entries by date (newest first)
+        related_entries.sort(key=lambda x: x['date'], reverse=True)
+        
+        return {
+            "status": "success",
+            "topic": topic_name,
+            "entries": related_entries
+        }
+    except Exception as e:
+        print(f"Error finding topic entries: {e}")
+        return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3001) 

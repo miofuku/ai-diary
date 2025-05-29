@@ -395,37 +395,117 @@ function App() {
     ]
   };
 
-  // 从服务器获取主题数据
+  // Update fetchTopicThreads to use GraphQL topic_graph endpoint
   const fetchTopicThreads = async () => {
+    setIsLoadingTopics(true);
     try {
-      setIsLoadingTopics(true);
-      const response = await fetch('http://localhost:3001/api/topic-threads');
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Topic threads fetched:', data);
+      // First try to get topics from GraphQL endpoint
+      const graphqlResponse = await fetch('http://localhost:3001/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: `
+            query {
+              topicGraph {
+                topics {
+                  id
+                  name
+                  type
+                  category
+                  topicType
+                  importance
+                  sentiment
+                  context
+                }
+                people {
+                  id
+                  name
+                  type
+                  category
+                  role
+                  importance
+                }
+                relations {
+                  source
+                  target
+                  type
+                  strength
+                }
+              }
+            }
+          `
+        }),
+      });
+
+      const graphqlData = await graphqlResponse.json();
+      
+      if (graphqlData && graphqlData.data && graphqlData.data.topicGraph) {
+        console.log('Topics loaded from GraphQL endpoint');
         
-        // 处理服务器返回的主题数据
-        if (data && data.topics && data.topics.length > 0) {
-          // 将服务器返回的主题转换为UI可用的格式
-          const formattedTopics = data.topics.map((topic, index) => ({
-            id: `dynamic_${index}`,
+        // Process the topics and people data
+        const topics = graphqlData.data.topicGraph.topics || [];
+        const people = graphqlData.data.topicGraph.people || [];
+        
+        // Combine topics and people with proper formatting
+        const formattedTopics = [
+          ...topics.map(topic => ({
+            id: topic.id,
             name: topic.name,
-            category: topic.category,
-            summary: topic.summary,
-            progression: topic.progression,
-            mentions: topic.mentions
-          }));
-          
-          setDynamicTopics(formattedTopics);
-          return formattedTopics;
-        }
-      } else {
-        console.error('Failed to fetch topic threads');
-        return null;
+            type: 'topic',
+            category: topic.category || 'general',
+            importance: topic.importance || 3
+          })),
+          ...people.map(person => ({
+            id: person.id,
+            name: person.name,
+            type: 'person', 
+            category: 'people',
+            importance: person.importance || 3
+          }))
+        ];
+        
+        // Sort by importance (highest first) and then by name
+        formattedTopics.sort((a, b) => {
+          if (b.importance !== a.importance) {
+            return b.importance - a.importance;
+          }
+          return a.name.localeCompare(b.name);
+        });
+        
+        setDynamicTopics(formattedTopics);
+        setIsLoadingTopics(false);
+        return;
       }
+
+      // Fall back to the old API if GraphQL fails
+      console.log('Falling back to API endpoint for topics');
+      const response = await fetch('http://localhost:3001/api/topic-threads');
+      const data = await response.json();
+      setDynamicTopics(data.topics);
     } catch (error) {
-      console.error('Error fetching topic threads:', error);
-      return null;
+      console.error('Error fetching topics:', error);
+      // Try fallback API if GraphQL fails
+      try {
+        const response = await fetch('http://localhost:3001/api/topic-threads');
+        const data = await response.json();
+        setDynamicTopics(data.topics);
+      } catch (fallbackError) {
+        console.error('Error with fallback topic fetch:', fallbackError);
+      }
+    } finally {
+      setIsLoadingTopics(false);
+    }
+  };
+
+  // Update refresh topics button to show loading state
+  const handleRefreshTopics = async () => {
+    setIsLoadingTopics(true);
+    try {
+      await fetchTopicThreads();
+    } catch (error) {
+      console.error('Error refreshing topics:', error);
     } finally {
       setIsLoadingTopics(false);
     }
@@ -460,12 +540,43 @@ function App() {
           }));
           setThemeRelatedEntries(relatedEntries);
         } else {
-          setThemeRelatedEntries([]);
+          // 如果找不到mentions，尝试从API获取相关条目
+          fetchTopicEntries(themeId.replace('dynamic_', ''));
         }
+      } else if (typeof themeId === 'string') {
+        // 直接从API获取相关条目
+        fetchTopicEntries(themeId);
       } else {
         // 使用静态主题数据
         setThemeRelatedEntries(themeEntryData[themeId] || []);
       }
+    }
+  };
+
+  // 获取特定主题相关的日记条目
+  const fetchTopicEntries = async (topicId) => {
+    try {
+      setIsLoadingTopics(true);
+      const response = await fetch(`http://localhost:3001/api/topic-entries/${topicId}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Topic entries fetched:', data);
+        
+        if (data.status === 'success' && data.entries && data.entries.length > 0) {
+          setThemeRelatedEntries(data.entries);
+        } else {
+          setThemeRelatedEntries([]);
+        }
+      } else {
+        console.error('Failed to fetch topic entries');
+        setThemeRelatedEntries([]);
+      }
+    } catch (error) {
+      console.error('Error fetching topic entries:', error);
+      setThemeRelatedEntries([]);
+    } finally {
+      setIsLoadingTopics(false);
     }
   };
 
@@ -804,16 +915,12 @@ function App() {
                         {getCurrentThemeEntries().map(entry => (
                           <div key={entry.id} className="theme-entry-item">
                             <div className="theme-entry-header">
-                              <h4>{entry.title}</h4>
                               <span className="theme-entry-date">{entry.date}</span>
                             </div>
                             <div 
                               className="theme-entry-excerpt"
                               dangerouslySetInnerHTML={{ __html: entry.excerpt }}
                             />
-                            <div className="theme-entry-footer">
-                              <button className="view-details-button">查看详细</button>
-                            </div>
                           </div>
                         ))}
                       </div>

@@ -353,14 +353,13 @@
 }
 
 .theme-entry-header h4 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 500;
+  display: none;
 }
 
 .theme-entry-date {
-  color: #6b7280;
+  color: #f44336;
   font-size: 0.875rem;
+  font-weight: normal;
 }
 
 .theme-entry-excerpt {
