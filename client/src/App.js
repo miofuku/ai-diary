@@ -19,6 +19,14 @@ function App() {
   // Add state for dynamic topics
   const [dynamicTopics, setDynamicTopics] = useState([]);
   const [isLoadingTopics, setIsLoadingTopics] = useState(false);
+  // Add state for pagination and sort order
+  const [currentPage, setCurrentPage] = useState(1);
+  const [entriesPerPage] = useState(5);
+  const [sortNewestFirst, setSortNewestFirst] = useState(false);
+  // Add state for theme entries pagination and sorting
+  const [themeCurrentPage, setThemeCurrentPage] = useState(1);
+  const [themeEntriesPerPage] = useState(3);
+  const [themeSortNewestFirst, setThemeSortNewestFirst] = useState(true);
 
   const fetchEntries = async () => {
     try {
@@ -64,6 +72,8 @@ function App() {
     });
     console.log('Filtered entries:', filtered.length);
     setFilteredEntries(filtered);
+    // Reset to first page when entries change
+    setCurrentPage(1);
   }, [entries]);
 
   useEffect(() => {
@@ -434,6 +444,7 @@ function App() {
     } else {
       // Select the theme and show related entries
       setSelectedTheme(themeId);
+      setThemeCurrentPage(1); // Reset to first page when changing themes
       
       // 检查是否是动态主题
       if (themeId.toString().startsWith('dynamic_')) {
@@ -457,6 +468,30 @@ function App() {
       }
     }
   };
+
+  // Toggle theme entries sort order
+  const toggleThemeSortOrder = () => {
+    setThemeSortNewestFirst(!themeSortNewestFirst);
+    setThemeCurrentPage(1); // Reset to first page when changing sort order
+  };
+
+  // Get current theme entries for pagination
+  const getCurrentThemeEntries = () => {
+    // Sort entries based on sort order
+    const sortedEntries = [...themeRelatedEntries].sort((a, b) => {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      return themeSortNewestFirst ? dateB - dateA : dateA - dateB;
+    });
+    
+    // Get current page entries
+    const indexOfLastEntry = themeCurrentPage * themeEntriesPerPage;
+    const indexOfFirstEntry = indexOfLastEntry - themeEntriesPerPage;
+    return sortedEntries.slice(indexOfFirstEntry, indexOfLastEntry);
+  };
+
+  // Change theme entries page
+  const themeEntriesPaginate = (pageNumber) => setThemeCurrentPage(pageNumber);
 
   // Import entries from a local JSON file
   const importEntriesFromFile = (event) => {
@@ -500,6 +535,29 @@ function App() {
   const handleTabChange = (tab) => {
     setActiveTab(tab);
   };
+
+  // Toggle sort order
+  const toggleSortOrder = () => {
+    setSortNewestFirst(!sortNewestFirst);
+  };
+
+  // Get current entries for pagination
+  const getCurrentEntries = () => {
+    // Sort entries based on sort order
+    const sortedEntries = [...filteredEntries].sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return sortNewestFirst ? dateB - dateA : dateA - dateB;
+    });
+    
+    // Get current page entries
+    const indexOfLastEntry = currentPage * entriesPerPage;
+    const indexOfFirstEntry = indexOfLastEntry - entriesPerPage;
+    return sortedEntries.slice(indexOfFirstEntry, indexOfLastEntry);
+  };
+
+  // Change page
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   return (
     <div className="App">
@@ -659,24 +717,41 @@ function App() {
                   </div>
                   
                   {filteredEntries.length > 0 ? (
-                    <div className="entry-content-list">
-                      {filteredEntries.map((entry) => (
-                        <div key={entry.id} className="entry-content-item">
-                          <div 
-                            className="entry-content"
-                            dangerouslySetInnerHTML={renderMarkdown(entry.content)}
-                          />
-                          <div className="entry-actions">
-                            <button 
-                              onClick={() => startEditing(entry)} 
-                              className="edit-button"
-                            >
-                              编辑
-                            </button>
+                    <>
+                      <div className="entry-content-list">
+                        {getCurrentEntries().map((entry) => (
+                          <div key={entry.id} className="entry-content-item">
+                            <div 
+                              className="entry-content"
+                              dangerouslySetInnerHTML={renderMarkdown(entry.content)}
+                            />
+                            <div className="entry-actions">
+                              <button 
+                                onClick={() => startEditing(entry)} 
+                                className="edit-button"
+                              >
+                                编辑
+                              </button>
+                            </div>
                           </div>
+                        ))}
+                      </div>
+                      
+                      {/* Pagination */}
+                      {filteredEntries.length > entriesPerPage && (
+                        <div className="pagination">
+                          {Array.from({ length: Math.ceil(filteredEntries.length / entriesPerPage) }).map((_, index) => (
+                            <button
+                              key={index}
+                              onClick={() => paginate(index + 1)}
+                              className={`page-button ${currentPage === index + 1 ? 'active' : ''}`}
+                            >
+                              {index + 1}
+                            </button>
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      )}
+                    </>
                   ) : (
                     <div className="no-entry-message">
                       这一天还没有日记内容
@@ -690,6 +765,9 @@ function App() {
                     <div className="loading-topics">正在加载主题...</div>
                   ) : (
                     <>
+                      <div className="themes-header">
+                        <div className="themes-title">热门主题</div>
+                      </div>
                       <div className="theme-tags">
                         {/* 优先显示动态主题，如果没有则显示静态主题 */}
                         {(dynamicTopics.length > 0 ? dynamicTopics : staticThemes).map(theme => (
@@ -707,22 +785,23 @@ function App() {
                           <span className="plus-icon">+</span>
                           <span>添加主题</span>
                         </button>
-                        <button 
-                          className="refresh-button"
-                          onClick={fetchTopicThreads}
-                          disabled={isLoadingTopics}
-                        >
-                          刷新主题
-                        </button>
                       </div>
                     </>
                   )}
 
                   {selectedTheme && themeRelatedEntries.length > 0 && (
                     <div className="theme-related-entries">
-                      <h3>与"{(dynamicTopics.length > 0 ? dynamicTopics : staticThemes).find(t => t.id === selectedTheme)?.name}"相关的日记片段</h3>
+                      <div className="theme-entries-header">
+                        <h3>与"{(dynamicTopics.length > 0 ? dynamicTopics : staticThemes).find(t => t.id === selectedTheme)?.name}"相关的日记片段</h3>
+                        <button 
+                          className={`theme-sort-button ${!themeSortNewestFirst ? 'active' : ''}`}
+                          onClick={toggleThemeSortOrder}
+                        >
+                          {themeSortNewestFirst ? '从最早的开始' : '从最新的开始'}
+                        </button>
+                      </div>
                       <div className="theme-entries-list">
-                        {themeRelatedEntries.map(entry => (
+                        {getCurrentThemeEntries().map(entry => (
                           <div key={entry.id} className="theme-entry-item">
                             <div className="theme-entry-header">
                               <h4>{entry.title}</h4>
@@ -738,6 +817,22 @@ function App() {
                           </div>
                         ))}
                       </div>
+                      
+                      {/* Theme entries pagination */}
+                      {themeRelatedEntries.length > themeEntriesPerPage && (
+                        <div className="pagination theme-pagination">
+                          {Array.from({ length: Math.ceil(themeRelatedEntries.length / themeEntriesPerPage) }).map((_, index) => (
+                            <button
+                              key={index}
+                              onClick={() => themeEntriesPaginate(index + 1)}
+                              className={`page-button ${themeCurrentPage === index + 1 ? 'active' : ''}`}
+                            >
+                              {index + 1}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      
                       <div className="view-all-container">
                         <button className="view-all-button">查看全部相关日记</button>
                       </div>
