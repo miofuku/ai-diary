@@ -14,6 +14,7 @@ function App() {
   const [selectedTheme, setSelectedTheme] = useState(null);
   const [themeRelatedEntries, setThemeRelatedEntries] = useState([]);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [activeTab, setActiveTab] = useState('home');
   const fileInputRef = useRef(null);
 
   const fetchEntries = async () => {
@@ -298,9 +299,11 @@ function App() {
   // 主题列表
   const themes = [
     { id: 1, name: '健康日记' },
-    { id: 2, name: '今日感想' },
-    { id: 3, name: '情绪变化' },
-    { id: 4, name: '自由书写' }
+    { id: 2, name: '园艺工作' },
+    { id: 3, name: '宠物' },
+    { id: 4, name: '工作项目' },
+    { id: 5, name: '阅读笔记' },
+    { id: 6, name: '旅行' }
   ];
 
   // 模拟主题相关的日记数据
@@ -319,36 +322,84 @@ function App() {
         excerpt: '...决定调整<span class="highlight">饮食结构</span>，减少碳水摄入，增加蛋白质和蔬菜的比例，为了更好的<span class="highlight">健康</span>...'
       }
     ],
-    2: [ // 今日感想
+    2: [ // 园艺工作
       { 
         id: 201, 
         date: '2023-06-01',
-        title: '工作总结',
-        excerpt: '...<span class="highlight">今日</span>项目终于完成了第一阶段，<span class="highlight">感到</span>非常有成就感，团队合作很顺利...'
+        title: '种植番茄',
+        excerpt: '...今天在<span class="highlight">花园</span>里种下了几颗番茄苗，希望今年能有好收成...'
       },
       { 
         id: 202, 
         date: '2023-06-05',
-        title: '阅读心得',
-        excerpt: '...<span class="highlight">今天</span>读完了那本书，<span class="highlight">感想</span>颇多，尤其是对主角的成长历程很有共鸣...'
+        title: '花园除草',
+        excerpt: '...花了两个小时给<span class="highlight">花园</span>除草，虽然累但看到整齐的<span class="highlight">园艺</span>成果很满足...'
       }
     ],
-    3: [ // 情绪变化
+    3: [ // 宠物
       { 
         id: 301, 
         date: '2023-07-10',
-        title: '起伏的一天',
-        excerpt: '...早上<span class="highlight">情绪</span>低落，但下午收到好消息后<span class="highlight">心情</span>明显好转，这种<span class="highlight">变化</span>很有趣...'
+        title: '猫咪体检',
+        excerpt: '...带<span class="highlight">小咪</span>去了宠物医院做年度体检，一切正常，医生说它很健康...'
+      },
+      { 
+        id: 302, 
+        date: '2023-07-15',
+        title: '新猫玩具',
+        excerpt: '...给<span class="highlight">小咪</span>买了新的猫爬架，它似乎很喜欢，一整天都在上面玩耍...'
       }
     ],
-    4: [ // 自由书写
+    4: [ // 工作项目
       { 
         id: 401, 
         date: '2023-08-01',
-        title: '随想录',
-        excerpt: '...<span class="highlight">自由</span>地记录下今天的所思所想，不受任何约束的<span class="highlight">书写</span>方式让我感到放松...'
+        title: '项目启动',
+        excerpt: '...今天<span class="highlight">项目</span>正式启动，团队成员都很积极，讨论了初步计划和时间表...'
+      },
+      { 
+        id: 402, 
+        date: '2023-08-10',
+        title: '进度汇报',
+        excerpt: '...<span class="highlight">项目</span>进展顺利，完成了第一阶段的开发任务，准备下周向客户演示...'
+      }
+    ],
+    5: [ // 阅读笔记
+      { 
+        id: 501, 
+        date: '2023-09-05',
+        title: '《原子习惯》',
+        excerpt: '...今天读完了《原子习惯》这本书，很多<span class="highlight">阅读</span>心得：关于如何建立持久的好习惯...'
+      }
+    ],
+    6: [ // 旅行
+      { 
+        id: 601, 
+        date: '2023-10-01',
+        title: '杭州之行',
+        excerpt: '...这次<span class="highlight">旅行</span>到杭州，西湖的景色果然名不虚传，特别是雨后的断桥...'
       }
     ]
+  };
+
+  // 从服务器获取主题数据
+  const fetchTopicThreads = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/api/topic-threads');
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Topic threads fetched:', data);
+        // 这里可以处理服务器返回的主题数据
+        // 例如: setServerThemes(data.topics);
+        return data;
+      } else {
+        console.error('Failed to fetch topic threads');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error fetching topic threads:', error);
+      return null;
+    }
   };
 
   const handleThemeClick = (themeId) => {
@@ -401,6 +452,11 @@ function App() {
     reader.readAsText(file);
   };
 
+  // Add a function to handle tab changes
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+  };
+
   return (
     <div className="App">
       <header className="app-header">
@@ -414,9 +470,21 @@ function App() {
             <span className="logo-text">Reflectly</span>
           </div>
           <nav className="app-nav">
-            <a href="#" className="nav-link active">首页</a>
-            <a href="#" className="nav-link">日记</a>
-            <a href="#" className="nav-link">日历</a>
+            <a 
+              href="#" 
+              className={`nav-link ${activeTab === 'home' ? 'active' : ''}`}
+              onClick={() => handleTabChange('home')}
+            >首页</a>
+            <a 
+              href="#" 
+              className={`nav-link ${activeTab === 'diary' ? 'active' : ''}`}
+              onClick={() => handleTabChange('diary')}
+            >日记</a>
+            <a 
+              href="#" 
+              className={`nav-link ${activeTab === 'calendar' ? 'active' : ''}`}
+              onClick={() => handleTabChange('calendar')}
+            >日历</a>
           </nav>
         </div>
         <button className="new-project-button">
@@ -429,7 +497,9 @@ function App() {
         <main className="content-container">
           <div className="content-inner">
             <div className="page-header">
-              <h1>首页</h1>
+              <h1>{activeTab === 'home' ? '首页' : 
+                  activeTab === 'diary' ? '日记' : 
+                  '日历'}</h1>
             </div>
 
             {/* Import dialog */}
@@ -451,42 +521,125 @@ function App() {
               </div>
             )}
 
-            {!editingEntryId && (
-              <div className="input-card">
-                <form onSubmit={handleSubmit} className="diary-form">
-                  <textarea
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    placeholder="写下你的想法..."
-                    className="diary-textarea"
-                  />
-                  
-                  <div className="input-toolbar">
-                    <div className="toolbar-icons">
-                      <button type="button" className="icon-button">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2ZM18 20H6V4H13V9H18V20ZM8 16H16V18H8V16ZM8 12H16V14H8V12Z" fill="#666"/>
-                        </svg>
-                      </button>
-                      <button type="button" className="icon-button">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M19 5V19H5V5H19ZM19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3ZM14.14 11.86L11.14 15.73L9 13.14L6 17H18L14.14 11.86Z" fill="#666"/>
-                        </svg>
-                      </button>
-                      <button type="button" className="icon-button">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" fill="#666"/>
-                        </svg>
-                      </button>
-                    </div>
-                    <button type="submit" disabled={!content.trim()} className="save-button">
-                      保存日记
-                    </button>
+            {/* Home tab content */}
+            {activeTab === 'home' && (
+              <>
+                {!editingEntryId && (
+                  <div className="input-card">
+                    <form onSubmit={handleSubmit} className="diary-form">
+                      <textarea
+                        value={content}
+                        onChange={(e) => setContent(e.target.value)}
+                        placeholder="写下你的想法..."
+                        className="diary-textarea"
+                      />
+                      
+                      <div className="input-toolbar">
+                        <div className="toolbar-icons">
+                          <button type="button" className="icon-button">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2ZM18 20H6V4H13V9H18V20ZM8 16H16V18H8V16ZM8 12H16V14H8V12Z" fill="#666"/>
+                            </svg>
+                          </button>
+                          <button type="button" className="icon-button">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M19 5V19H5V5H19ZM19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3ZM14.14 11.86L11.14 15.73L9 13.14L6 17H18L14.14 11.86Z" fill="#666"/>
+                            </svg>
+                          </button>
+                          <button type="button" className="icon-button">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" fill="#666"/>
+                            </svg>
+                          </button>
+                        </div>
+                        <button type="submit" disabled={!content.trim()} className="save-button">
+                          保存日记
+                        </button>
+                      </div>
+                    </form>
                   </div>
-                </form>
-              </div>
+                )}
+                
+                {/* Selected Date Entry Display */}
+                <div className="selected-date-entry">
+                  <div className="selected-date-header">
+                    <div className="selected-date">{formatDate(selectedDate)}</div>
+                  </div>
+                  
+                  {filteredEntries.length > 0 ? (
+                    <div className="entry-content-list">
+                      {filteredEntries.map((entry) => (
+                        <div key={entry.id} className="entry-content-item">
+                          <div 
+                            className="entry-content"
+                            dangerouslySetInnerHTML={renderMarkdown(entry.content)}
+                          />
+                          <div className="entry-actions">
+                            <button 
+                              onClick={() => startEditing(entry)} 
+                              className="edit-button"
+                            >
+                              编辑
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="no-entry-message">
+                      这一天还没有日记内容
+                    </div>
+                  )}
+                </div>
+
+                <div className="themes-section">
+                  <h2>日记主题</h2>
+                  <div className="theme-tags">
+                    {themes.map(theme => (
+                      <div 
+                        key={theme.id} 
+                        className={`theme-tag ${selectedTheme === theme.id ? 'active' : ''}`}
+                        onClick={() => handleThemeClick(theme.id)}
+                      >
+                        {theme.name}
+                      </div>
+                    ))}
+                  </div>
+                  <button className="add-theme-button">
+                    <span className="plus-icon">+</span>
+                    <span>添加主题</span>
+                  </button>
+
+                  {selectedTheme && themeRelatedEntries.length > 0 && (
+                    <div className="theme-related-entries">
+                      <h3>与"{themes.find(t => t.id === selectedTheme)?.name}"相关的日记片段</h3>
+                      <div className="theme-entries-list">
+                        {themeRelatedEntries.map(entry => (
+                          <div key={entry.id} className="theme-entry-item">
+                            <div className="theme-entry-header">
+                              <h4>{entry.title}</h4>
+                              <span className="theme-entry-date">{entry.date}</span>
+                            </div>
+                            <div 
+                              className="theme-entry-excerpt"
+                              dangerouslySetInnerHTML={{ __html: entry.excerpt }}
+                            />
+                            <div className="theme-entry-footer">
+                              <button className="view-details-button">查看详细</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="view-all-container">
+                        <button className="view-all-button">查看全部相关日记</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
-            
+
+            {/* Edit form - keep this outside tab content as it's modal-like */}
             {editingEntryId && (
               <div className="edit-form">
                 <div className="edit-header">
@@ -533,83 +686,6 @@ function App() {
                 </div>
               </div>
             )}
-
-            {/* Selected Date Entry Display */}
-            <div className="selected-date-entry">
-              <div className="selected-date-header">
-                <div className="selected-date">{formatDate(selectedDate)}</div>
-              </div>
-              
-              {filteredEntries.length > 0 ? (
-                <div className="entry-content-list">
-                  {filteredEntries.map((entry) => (
-                    <div key={entry.id} className="entry-content-item">
-                      <div 
-                        className="entry-content"
-                        dangerouslySetInnerHTML={renderMarkdown(entry.content)}
-                      />
-                      <div className="entry-actions">
-                        <button 
-                          onClick={() => startEditing(entry)} 
-                          className="edit-button"
-                        >
-                          编辑
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="no-entry-message">
-                  这一天还没有日记内容
-                </div>
-              )}
-            </div>
-
-            <div className="themes-section">
-              <h2>日记主题</h2>
-              <div className="theme-tags">
-                {themes.map(theme => (
-                  <div 
-                    key={theme.id} 
-                    className={`theme-tag ${selectedTheme === theme.id ? 'active' : ''}`}
-                    onClick={() => handleThemeClick(theme.id)}
-                  >
-                    {theme.name}
-                  </div>
-                ))}
-              </div>
-              <button className="add-theme-button">
-                <span className="plus-icon">+</span>
-                <span>添加主题</span>
-              </button>
-
-              {selectedTheme && themeRelatedEntries.length > 0 && (
-                <div className="theme-related-entries">
-                  <h3>与"{themes.find(t => t.id === selectedTheme)?.name}"相关的日记片段</h3>
-                  <div className="theme-entries-list">
-                    {themeRelatedEntries.map(entry => (
-                      <div key={entry.id} className="theme-entry-item">
-                        <div className="theme-entry-header">
-                          <h4>{entry.title}</h4>
-                          <span className="theme-entry-date">{entry.date}</span>
-                        </div>
-                        <div 
-                          className="theme-entry-excerpt"
-                          dangerouslySetInnerHTML={{ __html: entry.excerpt }}
-                        />
-                        <div className="theme-entry-footer">
-                          <button className="view-details-button">查看详细</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="view-all-container">
-                    <button className="view-all-button">查看全部相关日记</button>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
         </main>
 
@@ -620,7 +696,6 @@ function App() {
             onDateSelect={handleDateSelect} 
             selectedDate={selectedDate}
           />
-
         </aside>
       </div>
     </div>

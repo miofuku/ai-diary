@@ -7,32 +7,62 @@ const TopicThreads = () => {
   const [expandedTopic, setExpandedTopic] = useState(null);
   const [error, setError] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+
+  // 预定义的主题分类
+  const categories = [
+    { id: 'all', name: '全部主题' },
+    { id: 'projects', name: '项目' },
+    { id: 'people', name: '人物' },
+    { id: 'places', name: '地点' },
+    { id: 'activities', name: '活动' }
+  ];
 
   useEffect(() => {
-    const fetchTopicThreads = async () => {
-      try {
-        setIsLoading(true);
-        console.log("Fetching topic threads...");
-        const response = await fetch('http://localhost:3001/api/topic-threads');
-        
-        if (!response.ok) {
-          throw new Error(`Server responded with status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log("Topic threads received:", data);
-        setTopicThreads(data.topics || []);
-        setLastUpdate(new Date());
-      } catch (error) {
-        console.error('Failed to fetch topic threads:', error);
-        setError('Could not load topic threads. Please try again later.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchTopicThreads();
   }, []);
+
+  const fetchTopicThreads = async () => {
+    try {
+      setIsLoading(true);
+      console.log("Fetching topic threads...");
+      const response = await fetch('http://localhost:3001/api/topic-threads');
+      
+      if (!response.ok) {
+        throw new Error(`Server responded with status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("Topic threads received:", data);
+      
+      // 为每个主题分配一个分类
+      const processedTopics = (data.topics || []).map(topic => {
+        // 这里可以根据主题名称或内容来确定分类
+        // 简单示例：根据关键词分类
+        let category = 'activities';
+        if (topic.name.includes('项目') || topic.name.includes('工作')) {
+          category = 'projects';
+        } else if (topic.name.includes('人') || topic.name.includes('朋友') || topic.name.includes('家人')) {
+          category = 'people';
+        } else if (topic.name.includes('地点') || topic.name.includes('旅行') || topic.name.includes('城市')) {
+          category = 'places';
+        }
+        
+        return {
+          ...topic,
+          category
+        };
+      });
+      
+      setTopicThreads(processedTopics);
+      setLastUpdate(new Date());
+    } catch (error) {
+      console.error('Failed to fetch topic threads:', error);
+      setError('无法加载主题线索。请稍后再试。');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const toggleTopic = (topicId) => {
     if (expandedTopic === topicId) {
@@ -43,23 +73,19 @@ const TopicThreads = () => {
   };
 
   const refreshTopics = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch('http://localhost:3001/api/topic-threads');
-      if (response.ok) {
-        const data = await response.json();
-        setTopicThreads(data.topics || []);
-        setLastUpdate(new Date());
-      }
-    } catch (error) {
-      console.error('Failed to refresh topics:', error);
-    } finally {
-      setIsLoading(false);
-    }
+    await fetchTopicThreads();
   };
 
+  const handleCategoryClick = (categoryId) => {
+    setSelectedCategory(categoryId === 'all' ? null : categoryId);
+  };
+
+  const filteredTopics = selectedCategory
+    ? topicThreads.filter(topic => topic.category === selectedCategory)
+    : topicThreads;
+
   if (isLoading) {
-    return <div className="topic-threads-container loading">Loading topic threads...</div>;
+    return <div className="topic-threads-container loading">正在加载主题线索...</div>;
   }
 
   if (error) {
@@ -69,31 +95,43 @@ const TopicThreads = () => {
   return (
     <div className="topic-threads-container">
       <div className="topic-header-section">
-        <h2>Topic Threads</h2>
+        <h2>日记主题</h2>
         <button className="refresh-button" onClick={refreshTopics}>
-          Refresh Topics
+          刷新主题
         </button>
       </div>
       <p className="topic-description">
-        Recurring themes and their progression in your diary
-        {lastUpdate && <span className="last-update"> · Updated: {lastUpdate.toLocaleTimeString()}</span>}
+        您日记中的重复主题及其发展
+        {lastUpdate && <span className="last-update"> · 更新于: {lastUpdate.toLocaleTimeString()}</span>}
       </p>
       
-      {topicThreads.length === 0 ? (
+      <div className="category-filters">
+        {categories.map(category => (
+          <button 
+            key={category.id}
+            className={`category-button ${selectedCategory === category.id || (category.id === 'all' && !selectedCategory) ? 'active' : ''}`}
+            onClick={() => handleCategoryClick(category.id)}
+          >
+            {category.name}
+          </button>
+        ))}
+      </div>
+      
+      {filteredTopics.length === 0 ? (
         <div className="no-topics">
-          No recurring topics found yet. Keep adding more entries to see connections.
+          {selectedCategory ? '该分类下暂无主题。' : '暂未找到重复主题。继续添加更多日记条目以查看关联。'}
           <div className="tips">
-            <p>Tips:</p>
+            <p>提示:</p>
             <ul>
-              <li>Add at least 2-3 entries to start seeing connections</li>
-              <li>Mention the same topics across different entries</li>
-              <li>Click "Refresh Topics" after adding new entries</li>
+              <li>添加至少2-3个条目开始查看关联</li>
+              <li>在不同条目中提及相同的主题</li>
+              <li>添加新条目后点击"刷新主题"</li>
             </ul>
           </div>
         </div>
       ) : (
         <div className="topic-list">
-          {topicThreads.map((topic, index) => (
+          {filteredTopics.map((topic, index) => (
             <div 
               key={index} 
               className={`topic-card ${expandedTopic === index ? 'expanded' : ''}`}
@@ -102,7 +140,10 @@ const TopicThreads = () => {
                 className="topic-header" 
                 onClick={() => toggleTopic(index)}
               >
-                <h3>{topic.name}</h3>
+                <div className="topic-header-content">
+                  <h3>{topic.name}</h3>
+                  <span className="topic-category-tag">{categories.find(c => c.id === topic.category)?.name || '其他'}</span>
+                </div>
                 <div className="topic-summary">{topic.summary}</div>
                 <div className="expand-icon">{expandedTopic === index ? '▼' : '►'}</div>
               </div>
@@ -110,7 +151,7 @@ const TopicThreads = () => {
               {expandedTopic === index && (
                 <div className="topic-timeline">
                   <div className="progression-summary">
-                    <h4>Progression</h4>
+                    <h4>发展历程</h4>
                     <p>{topic.progression}</p>
                   </div>
                   

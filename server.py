@@ -15,6 +15,10 @@ from openai import OpenAI
 # from faster_whisper import WhisperModel
 import os
 from dotenv import load_dotenv
+import strawberry
+from strawberry.fastapi import GraphQLRouter
+import networkx as nx
+from typing import List, Optional
 
 # Load environment variables
 load_dotenv()
@@ -55,6 +59,9 @@ class EntryUpdate(BaseModel):
     existingContent: Optional[str] = None
     newContent: Optional[str] = None
 
+class TopicExtractRequest(BaseModel):
+    content: str
+
 # Temporarily disabled voice input functionality
 # Load Whisper model - use base model to reduce CPU usage
 # model = None  # Initialize as None, load only when needed
@@ -70,6 +77,8 @@ class EntryUpdate(BaseModel):
 # Data path - create data directory if it doesn't exist
 data_dir = Path('./data')
 data_path = data_dir / 'entries.json'
+topics_path = data_dir / 'topics.json'
+graph_path = data_dir / 'topic_graph.json'
 
 # Enhanced ensure_data_file function with debugging
 def ensure_data_file():
@@ -92,6 +101,22 @@ def ensure_data_file():
                 print(f"Data file exists but contains invalid JSON. Resetting it.")
                 with open(data_path, 'w') as f:
                     f.write('[]')
+                    
+        # Ensure topics file exists
+        if not topics_path.exists():
+            print(f"Creating new topics file at {topics_path.absolute()}")
+            with open(topics_path, 'w') as f:
+                json.dump({"topics": [], "people": [], "relations": []}, f)
+        
+        # Ensure graph file exists
+        if not graph_path.exists():
+            print(f"Creating new topic graph file at {graph_path.absolute()}")
+            graph = nx.Graph()
+            # Save as JSON
+            graph_data = nx.node_link_data(graph)
+            with open(graph_path, 'w') as f:
+                json.dump(graph_data, f)
+                
     except Exception as e:
         print(f"Error ensuring data file: {e}")
         # Create an in-memory fallback if all else fails
@@ -128,6 +153,182 @@ def optimize_text(content: str) -> str:
         print(f"Error optimizing text: {e}")
         # If optimization fails, return the original content
         return content
+
+# Extract topics from text using OpenAI
+def extract_topics(content: str) -> dict:
+    """Extract topics, people, and relationships from diary text"""
+    if not content or not content.strip():
+        return {"topics": [], "people": [], "relations": []}
+    
+    try:
+        print(f"Extracting topics from content ({len(content)} chars)")
+        response = client.chat.completions.create(
+            model="gpt-4o",  # Using GPT-4o for better entity recognition
+            messages=[
+                {
+                    "role": "system", 
+                    "content": """You are a diary topic extraction assistant. Analyze the provided diary entry to identify:
+
+1. TOPICS: Important subjects, themes, activities, projects, or concepts mentioned
+2. PEOPLE: Any people mentioned (real or fictional)
+3. RELATIONS: Connections between topics and people
+
+Extract these elements in a structured JSON format with the following schema:
+{
+  "topics": [
+    {
+      "id": "unique_string_id",
+      "name": "Topic Name",
+      "type": "category", 
+      "category": "projects|places|activities",
+      "importance": 1-5 scale,
+      "sentiment": -2 to +2 scale,
+      "context": "Brief context about this topic"
+    }
+  ],
+  "people": [
+    {
+      "id": "unique_string_id",
+      "name": "Person Name",
+      "category": "people",
+      "role": "relationship to author",
+      "importance": 1-5 scale
+    }
+  ],
+  "relations": [
+    {
+      "source": "topic_or_person_id",
+      "target": "topic_or_person_id",
+      "type": "relationship type",
+      "strength": 1-5 scale
+    }
+  ]
+}
+
+For the "category" field, categorize each topic into one of these categories:
+- "projects": Work projects, personal projects, ongoing activities with goals
+- "places": Locations, venues, cities, countries, or any physical places
+- "activities": One-time activities, events, experiences
+- "people": All people should be in the people array with this category
+
+IMPORTANT: 
+1. If the text is in Chinese, extract topics in Chinese. Do not translate.
+2. Keep the response concise and focused only on clearly mentioned entities.
+3. Assign appropriate categories to help organize the topics.
+4. Create meaningful relations only when there's clear connection in the text."""
+                },
+                {
+                    "role": "user",
+                    "content": f"Extract topics, people and relations from this diary entry: {content}"
+                }
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"}
+        )
+        
+        result = json.loads(response.choices[0].message.content)
+        print(f"Topics extracted successfully: {len(result.get('topics', []))} topics, {len(result.get('people', []))} people")
+        
+        # Update the topic graph with new data
+        update_topic_graph(result)
+        
+        return result
+    except Exception as e:
+        print(f"Error extracting topics: {e}")
+        # If extraction fails, return empty results
+        return {"topics": [], "people": [], "relations": []}
+
+# Update topic graph with new topics
+def update_topic_graph(topics_result):
+    """
+    Update the topic graph with new topics, people, and relations
+    """
+    # Ensure the topic graph file exists
+    ensure_data_file()
+    
+    # Load existing topic graph
+    with open(graph_path, "r", encoding="utf-8") as f:
+        graph_data = json.load(f)
+    
+    existing_nodes = {node["id"]: node for node in graph_data.get("nodes", [])}
+    existing_edges = []
+    
+    for edge in graph_data.get("edges", []):
+        edge_key = f"{edge['source']}-{edge['target']}-{edge.get('type', '')}"
+        existing_edges.append(edge_key)
+    
+    # Add or update topics
+    for topic in topics_result.get("topics", []):
+        if topic["id"] in existing_nodes:
+            # Update existing topic
+            existing_nodes[topic["id"]].update({
+                "name": topic["name"],
+                "type": "topic",
+                "category": topic.get("category", "activities"),
+                "topicType": topic.get("type", "concept"),
+                "importance": topic.get("importance", 3),
+                "sentiment": topic.get("sentiment", 0),
+                "context": topic.get("context", "")
+            })
+        else:
+            # Add new topic
+            existing_nodes[topic["id"]] = {
+                "id": topic["id"],
+                "name": topic["name"],
+                "type": "topic",
+                "category": topic.get("category", "activities"),
+                "topicType": topic.get("type", "concept"),
+                "importance": topic.get("importance", 3),
+                "sentiment": topic.get("sentiment", 0),
+                "context": topic.get("context", "")
+            }
+    
+    # Add or update people
+    for person in topics_result.get("people", []):
+        if person["id"] in existing_nodes:
+            # Update existing person
+            existing_nodes[person["id"]].update({
+                "name": person["name"],
+                "type": "person",
+                "category": "people",
+                "role": person.get("role", ""),
+                "importance": person.get("importance", 3)
+            })
+        else:
+            # Add new person
+            existing_nodes[person["id"]] = {
+                "id": person["id"],
+                "name": person["name"],
+                "type": "person",
+                "category": "people",
+                "role": person.get("role", ""),
+                "importance": person.get("importance", 3)
+            }
+    
+    # Add new relations
+    new_edges = []
+    for relation in topics_result.get("relations", []):
+        edge_key = f"{relation['source']}-{relation['target']}-{relation.get('type', '')}"
+        
+        # Skip if this exact edge already exists
+        if edge_key in existing_edges:
+            continue
+            
+        # Add new edge
+        new_edges.append({
+            "source": relation["source"],
+            "target": relation["target"],
+            "type": relation.get("type", "related_to"),
+            "strength": relation.get("strength", 3)
+        })
+    
+    # Update the graph data
+    graph_data["nodes"] = list(existing_nodes.values())
+    graph_data["edges"] = graph_data.get("edges", []) + new_edges
+    
+    # Save the updated graph
+    with open(graph_path, "w", encoding="utf-8") as f:
+        json.dump(graph_data, f, ensure_ascii=False, indent=2)
 
 # Enhanced integrate_diary_content function with smart formatting
 def integrate_diary_content(existing_content, new_content):
@@ -271,6 +472,10 @@ async def create_entry(entry: EntryCreate):
         except Exception as e:
             print(f"Error writing entries to file: {e}")
             raise
+            
+        # Extract topics from the entry and update the topic graph
+        topics_data = extract_topics(optimized_content)
+        update_topic_graph(topics_data)
         
         return new_entry
     except Exception as e:
@@ -361,6 +566,10 @@ async def update_entry(id: int, entry_update: EntryUpdate):
     with open(data_path, 'w') as f:
         json.dump(entries, f, indent=2)
     
+    # Extract topics from the updated entry and update the topic graph
+    topics_data = extract_topics(final_content)
+    update_topic_graph(topics_data)
+    
     return entries[entry_index]
 
 # Add a new endpoint to identify topic threads across entries
@@ -375,6 +584,55 @@ async def get_topic_threads():
     try:
         # Extract topic threads using LLM
         topic_threads = analyze_topic_threads(entries)
+        
+        # Update the topic graph with the topics found
+        if topic_threads and "topics" in topic_threads:
+            # Convert topics to the format expected by update_topic_graph
+            graph_data = {
+                "topics": [],
+                "people": [],
+                "relations": []
+            }
+            
+            for topic in topic_threads["topics"]:
+                topic_id = topic["name"].lower().replace(" ", "_").replace("，", "").replace("。", "").replace("、", "")
+                category = topic.get("category", "activities")
+                
+                if category == "people":
+                    graph_data["people"].append({
+                        "id": topic_id,
+                        "name": topic["name"],
+                        "category": "people",
+                        "role": "",
+                        "importance": 3
+                    })
+                else:
+                    graph_data["topics"].append({
+                        "id": topic_id,
+                        "name": topic["name"],
+                        "category": category,
+                        "type": "concept",
+                        "importance": 3,
+                        "sentiment": 0,
+                        "context": topic.get("summary", "")
+                    })
+                
+                # Create relations between topics that mention each other
+                for other_topic in topic_threads["topics"]:
+                    if topic["name"] != other_topic["name"]:
+                        other_id = other_topic["name"].lower().replace(" ", "_").replace("，", "").replace("。", "").replace("、", "")
+                        # Check if one topic mentions the other
+                        if any(topic["name"] in mention.get("excerpt", "") for mention in other_topic.get("mentions", [])):
+                            graph_data["relations"].append({
+                                "source": topic_id,
+                                "target": other_id,
+                                "type": "related_to",
+                                "strength": 2
+                            })
+            
+            # Update the graph
+            update_topic_graph(graph_data)
+        
         return topic_threads
     except Exception as e:
         print(f"Error analyzing topic threads: {e}")
@@ -382,111 +640,350 @@ async def get_topic_threads():
 
 # Update the analyze_topic_threads function to be synchronous
 def analyze_topic_threads(entries):
+    """
+    Analyze diary entries to identify recurring topics and their progression over time
+    """
     if not entries:
         return {"topics": []}
     
-    # Prepare content for analysis with full context
-    entries_with_dates = [
+    # Sort entries by date
+    sorted_entries = sorted(entries, key=lambda e: e.get('createdAt', ''))
+    
+    # Prepare entries for analysis
+    entry_texts = []
+    for entry in sorted_entries:
+        date = entry.get('createdAt', '').split('T')[0]  # Extract date part
+        content = entry.get('content', '')
+        if content and date:
+            entry_texts.append({"date": date, "content": content})
+    
+    if not entry_texts:
+        return {"topics": []}
+    
+    # Prepare the system prompt
+    system_prompt = """
+    You are an AI assistant specialized in analyzing diary entries to identify recurring topics and themes.
+    
+    Your task is to:
+    1. Identify recurring topics, themes, people, or concepts mentioned across multiple diary entries
+    2. For each topic, provide a brief summary of what it's about
+    3. Describe how the topic progresses or changes over time
+    4. List relevant diary entries where the topic is mentioned, with dates and brief excerpts
+    5. Categorize each topic into one of these categories: projects, people, places, activities
+    
+    Format your response as a JSON object with the following structure:
+    {
+      "topics": [
         {
-            "id": entry["id"],
-            "date": entry["createdAt"],
-            "content": entry["content"]  # Use full content for better analysis
+          "name": "Topic Name",
+          "category": "projects|people|places|activities",
+          "summary": "Brief description of what this topic is about",
+          "progression": "Description of how this topic evolves over time",
+          "mentions": [
+            {
+              "date": "YYYY-MM-DD",
+              "excerpt": "Brief excerpt from the entry mentioning this topic"
+            }
+          ]
         }
-        for entry in entries
-    ]
+      ]
+    }
     
-    # Sort by date
-    entries_with_dates.sort(key=lambda x: x["date"])
+    IMPORTANT:
+    - Respond in the SAME LANGUAGE as the diary entries (Chinese if entries are in Chinese)
+    - Only include topics that appear in multiple entries or are significant
+    - Focus on quality over quantity - identify the most meaningful recurring themes
+    - For excerpts, include the most relevant sentences and highlight key phrases
+    - Maintain the original language of the entries in all outputs
+    """
     
-    # Debug entries for troubleshooting
-    print(f"Analyzing {len(entries_with_dates)} entries with OpenAI")
+    # Prepare the user prompt with the diary entries
+    user_prompt = f"""
+    Please analyze these diary entries to identify recurring topics and their progression over time:
+    
+    {json.dumps(entry_texts, ensure_ascii=False)}
+    
+    Return your analysis in the specified JSON format.
+    """
     
     try:
-        # Convert to JSON with proper Chinese character handling
-        entries_json = json.dumps(entries_with_dates, ensure_ascii=False)
-        
-        # Use OpenAI synchronously
+        # Call OpenAI API
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[
-                {
-                    "role": "system",
-                    "content": """You are an AI that analyzes diary entries to identify recurring topics and their progression over time.
-                    
-                    Your task:
-                    1. Identify ANY recurring topics/themes across these diary entries
-                    2. For each topic, identify relevant entries that mention or relate to it
-                    3. Analyze how the topic progresses or evolves across these entries
-                    4. Return your analysis in a structured JSON format with the following exact structure:
-                    {
-                      "topics": [
-                        {
-                          "name": "Topic Name",
-                          "summary": "Brief summary of what this topic is about",
-                          "progression": "Description of how this topic evolves over time",
-                          "mentions": [
-                            {
-                              "entryId": 123456789,
-                              "date": "ISO date",
-                              "excerpt": "Relevant excerpt from the entry"
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                    
-                    IMPORTANT: 
-                    - The diary entries are mainly in Chinese (中文)
-                    - CAREFULLY look for recurring topics 
-                    - Even if topics only appear in 2 entries, include them as important connections
-                    - Pay close attention to projects, tools, platforms, and activities mentioned repeatedly
-                    - CRITICAL: RESPOND IN THE SAME LANGUAGE AS THE ENTRIES - If entries are in Chinese, all topic names, summaries, progressions, and excerpts MUST BE IN CHINESE
-                    - DO NOT TRANSLATE ANYTHING TO ENGLISH - preserve the original language"""
-                },
-                {
-                    "role": "user",
-                    "content": f"Here are the diary entries in chronological order. Please identify ALL recurring topics and respond in the SAME LANGUAGE as the entries (mainly Chinese): {entries_json}"
-                }
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
             ],
-            temperature=0.1,  # Lower temperature for more deterministic results
-            response_format={"type": "json_object"}
+            response_format={"type": "json_object"},
+            temperature=0.3
         )
         
-        # Parse the response
-        response_content = response.choices[0].message.content
-        print(f"OpenAI topic analysis response preview: {response_content[:150]}...")
+        # Extract and parse the JSON response
+        content = response.choices[0].message.content
+        result = json.loads(content)
         
-        # Parse JSON response preserving Chinese characters
-        threads_data = json.loads(response_content)
-        
-        # Rest of your code to process the response remains the same
-        # Add entry links and clean up the response
-        for topic in threads_data.get("topics", []):
-            # Remove duplicates from mentions
-            seen_ids = set()
-            unique_mentions = []
-            
-            for mention in topic.get("mentions", []):
-                entry_id = mention.get("entryId")
-                if entry_id and entry_id not in seen_ids:
-                    seen_ids.add(entry_id)
-                    unique_mentions.append(mention)
-                    
-                    # Find the full entry
-                    full_entry = next((e for e in entries if e["id"] == entry_id), None)
-                    if full_entry:
-                        mention["fullContent"] = full_entry["content"]
-                        mention["date"] = full_entry["createdAt"]
-            
-            topic["mentions"] = unique_mentions
-        
-        return threads_data
+        return result
     except Exception as e:
-        print(f"Error in topic analysis: {e}")
-        print(f"Error details: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return {"topics": []}
+        print(f"Error calling OpenAI API: {str(e)}")
+        raise Exception(f"Failed to analyze entries with OpenAI: {str(e)}")
+
+# Extract topics from text endpoint
+@app.post("/api/extract-topics")
+async def extract_topics_endpoint():
+    """
+    Extract topics from diary entries and update the topic graph
+    """
+    try:
+        # Ensure the data files exist
+        ensure_data_file()
+        
+        # Load diary entries
+        entries = load_entries()
+        if not entries:
+            return {"status": "error", "message": "No diary entries found"}
+        
+        # Extract topics using OpenAI
+        topics_result = await extract_topics(entries)
+        
+        # Update the topic graph
+        update_topic_graph(topics_result)
+        
+        return {
+            "status": "success", 
+            "message": f"Successfully extracted topics from {len(entries)} entries",
+            "topics_count": len(topics_result.get("topics", [])),
+            "people_count": len(topics_result.get("people", [])),
+            "relations_count": len(topics_result.get("relations", []))
+        }
+    except Exception as e:
+        print(f"Error extracting topics: {str(e)}")
+        return {"status": "error", "message": f"Failed to extract topics: {str(e)}"}
+
+def load_entries():
+    """
+    Load diary entries from the data file
+    """
+    ensure_data_file()
+    try:
+        with open(data_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading entries: {str(e)}")
+        return []
+
+async def extract_topics(entries):
+    """
+    Extract topics from diary entries using OpenAI
+    """
+    if not entries:
+        return {"topics": [], "people": [], "relations": []}
+    
+    # Sort entries by date
+    sorted_entries = sorted(entries, key=lambda x: x.get("createdAt", ""))
+    
+    # Prepare the prompt for OpenAI
+    system_prompt = """
+    You are an expert at analyzing diary entries and extracting meaningful topics, people, and relationships.
+    Your task is to analyze the provided diary entries and:
+    
+    1. Identify recurring topics, themes, and concepts
+    2. Identify people mentioned in the entries
+    3. Identify relationships between topics and people
+    
+    For each topic, provide:
+    - A name (in the original language of the diary)
+    - Type (concept, activity, event, location, project, etc.)
+    - Importance (1-5 scale)
+    - Sentiment (-2 to +2 scale, where negative is negative sentiment)
+    - Context (brief description or relevant quotes)
+    
+    For each person:
+    - Name (in the original language of the diary)
+    - Role (if mentioned)
+    - Importance (1-5 scale)
+    
+    For each relationship:
+    - Source (topic or person ID)
+    - Target (topic or person ID)
+    - Type (describes, involves, related_to, etc.)
+    - Strength (1-5 scale)
+    
+    Return the results in JSON format with three arrays: topics, people, and relations.
+    """
+    
+    # Prepare the entries for the prompt
+    entries_text = "\n\n".join([
+        f"Date: {entry.get('createdAt', 'Unknown')}\n{entry.get('content', '')}" 
+        for entry in sorted_entries[:20]  # Limit to 20 entries to avoid token limits
+    ])
+    
+    user_prompt = f"""
+    Please analyze these diary entries and extract topics, people, and relationships:
+    
+    {entries_text}
+    
+    Return only a valid JSON object with the following structure:
+    {{
+      "topics": [
+        {{
+          "id": "topic_1",
+          "name": "Topic name",
+          "type": "concept|activity|event|location|project",
+          "importance": 1-5,
+          "sentiment": -2 to +2,
+          "context": "Brief description or quote"
+        }}
+      ],
+      "people": [
+        {{
+          "id": "person_1",
+          "name": "Person name",
+          "role": "Role description",
+          "importance": 1-5
+        }}
+      ],
+      "relations": [
+        {{
+          "source": "topic_1|person_1",
+          "target": "topic_2|person_2",
+          "type": "describes|involves|related_to",
+          "strength": 1-5
+        }}
+      ]
+    }}
+    """
+    
+    try:
+        # Call OpenAI API
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.3
+        )
+        
+        # Extract and parse the JSON response
+        content = response.choices[0].message.content
+        result = json.loads(content)
+        
+        return result
+    except Exception as e:
+        print(f"Error calling OpenAI API: {str(e)}")
+        raise Exception(f"Failed to analyze entries with OpenAI: {str(e)}")
+
+# GraphQL schema definition
+@strawberry.type
+class TopicNode:
+    id: str
+    name: str
+    type: str
+    category: str
+    topic_type: Optional[str] = None
+    importance: Optional[int] = None
+    sentiment: Optional[float] = None
+    context: Optional[str] = None
+
+@strawberry.type
+class PersonNode:
+    id: str
+    name: str
+    type: str
+    category: str = "people"
+    role: Optional[str] = None
+    importance: Optional[int] = None
+
+@strawberry.type
+class RelationEdge:
+    source: str
+    target: str
+    type: str
+    strength: Optional[int] = None
+
+# Define the Node union type separately
+Node = strawberry.union("Node", (TopicNode, PersonNode))
+
+@strawberry.type
+class TopicGraph:
+    @strawberry.field
+    def nodes(self) -> "list":
+        return []
+        
+    @strawberry.field
+    def edges(self) -> "list":
+        return []
+
+@strawberry.type
+class Query:
+    @strawberry.field
+    def topic_graph(self) -> "TopicGraph":
+        ensure_data_file()
+        
+        try:
+            # Load graph from file
+            with open(graph_path, 'r') as f:
+                graph_data = json.load(f)
+            
+            # Create a new TopicGraph instance
+            graph = TopicGraph()
+            
+            # Convert to GraphQL types
+            nodes = []
+            for node in graph_data.get('nodes', []):
+                node_id = node.get('id', '')
+                node_type = node.get('type', '')
+                
+                if node_type == 'topic':
+                    nodes.append(TopicNode(
+                        id=node_id,
+                        name=node.get('name', ''),
+                        type=node_type,
+                        category=node.get('category', 'activities'),
+                        topic_type=node.get('topicType', 'general'),
+                        importance=node.get('importance', 3),
+                        sentiment=node.get('sentiment', 0),
+                        context=node.get('context', '')
+                    ))
+                elif node_type == 'person':
+                    nodes.append(PersonNode(
+                        id=node_id,
+                        name=node.get('name', ''),
+                        type=node_type,
+                        category='people',
+                        role=node.get('role', ''),
+                        importance=node.get('importance', 3)
+                    ))
+            
+            # Override the nodes method
+            graph.nodes = lambda: nodes
+            
+            edges = []
+            for edge in graph_data.get('edges', []):
+                edges.append(RelationEdge(
+                    source=edge.get('source', ''),
+                    target=edge.get('target', ''),
+                    type=edge.get('type', 'related_to'),
+                    strength=edge.get('strength', 3)
+                ))
+            
+            # Override the edges method
+            graph.edges = lambda: edges
+            
+            return graph
+        except Exception as e:
+            print(f"Error fetching topic graph: {e}")
+            return TopicGraph()
+
+# Create GraphQL schema
+schema = strawberry.Schema(query=Query)
+
+# Create GraphQL router
+graphql_app = GraphQLRouter(schema)
+
+# Add GraphQL endpoints to the app
+app.include_router(graphql_app, prefix="/graphql")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3001) 

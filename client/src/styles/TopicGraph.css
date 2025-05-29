@@ -1,0 +1,265 @@
+.topic-graph-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0.5rem;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.topic-graph-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.topic-graph-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.topic-graph-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #2d3748;
+}
+
+.topic-graph-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.filter-controls {
+  display: flex;
+  align-items: center;
+}
+
+.filter-controls label {
+  margin-right: 0.5rem;
+  font-size: 0.9rem;
+  color: #4a5568;
+}
+
+.filter-select {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  background-color: white;
+  font-size: 0.9rem;
+}
+
+.extract-topics-button {
+  padding: 0.5rem 1rem;
+  background-color: #4299e1;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.extract-topics-button:hover {
+  background-color: #3182ce;
+}
+
+.extract-topics-button:disabled {
+  background-color: #a0aec0;
+  cursor: not-allowed;
+}
+
+.topic-graph-error {
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  background-color: #fed7d7;
+  border-left: 4px solid #e53e3e;
+  color: #c53030;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.topic-graph-content {
+  position: relative;
+  flex: 1;
+  min-height: 400px;
+  background-color: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.topic-graph-svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Loading and error states */
+.topic-graph-container.loading,
+.topic-graph-container.error {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 400px;
+  font-size: 1.1rem;
+  color: #4a5568;
+}
+
+.topic-graph-container.error {
+  color: #e53e3e;
+}
+
+/* Tooltip styles */
+.topic-tooltip {
+  position: absolute;
+  padding: 8px;
+  background-color: rgba(255, 255, 255, 0.95);
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+  z-index: 10;
+  max-width: 250px;
+}
+
+.tooltip-title {
+  font-weight: bold;
+  font-size: 1rem;
+  margin-bottom: 4px;
+  color: #2d3748;
+}
+
+.tooltip-type {
+  font-size: 0.8rem;
+  color: #718096;
+  margin-bottom: 8px;
+}
+
+.tooltip-detail {
+  font-size: 0.85rem;
+  color: #4a5568;
+  margin-bottom: 4px;
+}
+
+.tooltip-context {
+  font-size: 0.8rem;
+  color: #718096;
+  margin-top: 8px;
+  font-style: italic;
+  border-top: 1px dashed #e2e8f0;
+  padding-top: 6px;
+}
+
+/* Node details panel */
+.node-details-panel {
+  position: absolute;
+  right: 0.5rem;
+  top: 0.5rem;
+  width: 280px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 5;
+  overflow: hidden;
+}
+
+.node-details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background-color: #4299e1;
+  color: white;
+}
+
+.node-details-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.close-details-button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.node-details-content {
+  padding: 0.75rem;
+}
+
+.node-detail-row {
+  margin-bottom: 0.5rem;
+  display: flex;
+}
+
+.detail-label {
+  font-weight: 500;
+  color: #4a5568;
+  width: 70px;
+  flex-shrink: 0;
+}
+
+.detail-value {
+  color: #2d3748;
+  flex: 1;
+}
+
+.context-row {
+  flex-direction: column;
+}
+
+.context-row .detail-label {
+  margin-bottom: 0.5rem;
+}
+
+.context-row .detail-value {
+  font-style: italic;
+  color: #4a5568;
+  padding: 0.5rem;
+  background-color: #f7fafc;
+  border-radius: 4px;
+}
+
+/* Legend */
+.topic-graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  margin-top: 0.5rem;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.legend-title {
+  font-weight: 500;
+  color: #4a5568;
+  margin-right: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  margin-right: 0.75rem;
+}
+
+.legend-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+
+.legend-label {
+  font-size: 0.8rem;
+  color: #4a5568;
+} 
