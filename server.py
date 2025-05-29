@@ -1205,86 +1205,165 @@ async def ai_topics_status():
 
 # Add a new endpoint to find entries related to a specific topic
 @app.get("/api/topic-entries/{topic_id}")
-async def get_topic_entries(topic_id: str):
+async def get_topic_entries(topic_id: str, concise: bool = False):
     """
-    Find all diary entries that mention a specific topic using pattern matching
+    Get entries related to a specific topic
+    If concise=True, return only the relevant text snippets instead of full content
     """
     try:
+        # Ensure data directories exist
         ensure_data_file()
         
-        # Load the topic information from the graph
-        topic_name = None
-        topic_related_terms = []
+        # Load the topic graph data to get information about the topic
+        topic_data = None
         
-        # Load the graph data
-        with open(graph_path, 'r') as f:
-            graph_data = json.load(f)
-            
-        # Find the topic by ID
-        for node in graph_data.get('nodes', []):
-            if node.get('id') == topic_id:
-                topic_name = node.get('name')
-                # Add the topic name and any related terms
-                topic_related_terms.append(topic_name.lower())
-                # Add common variations of the name
-                if 'context' in node and node['context']:
-                    # Extract potential related terms from context
-                    context_words = node['context'].lower().replace(',', ' ').replace('.', ' ').split()
-                    # Filter for meaningful words (more than 2 characters)
-                    context_terms = [word for word in context_words if len(word) > 2]
-                    topic_related_terms.extend(context_terms)
-                break
+        # Try to load from graph_path
+        graph_path = os.path.join(data_dir, "topic_graph.json")
+        try:
+            if os.path.exists(graph_path) and os.path.getsize(graph_path) > 0:
+                with open(graph_path, "r") as f:
+                    graph_data = json.load(f)
+                    
+                # Find the topic node
+                for node in graph_data.get("nodes", []):
+                    if node.get("id") == topic_id:
+                        topic_data = node
+                        break
+        except Exception as e:
+            print(f"Error loading graph data: {e}")
         
-        if not topic_name:
+        # If topic not found in graph, try topics.json
+        if not topic_data:
+            topics_path = os.path.join(data_dir, "topics.json")
+            try:
+                if os.path.exists(topics_path) and os.path.getsize(topics_path) > 0:
+                    with open(topics_path, "r") as f:
+                        topics_data = json.load(f)
+                        
+                    # Find the topic
+                    for topic in topics_data:
+                        if topic.get("id") == topic_id:
+                            topic_data = topic
+                            break
+            except Exception as e:
+                print(f"Error loading topics data: {e}")
+        
+        if not topic_data:
             return {"status": "error", "message": f"Topic with ID {topic_id} not found"}
         
-        # Get all entries from the data file
-        with open(data_path, 'r') as f:
-            entries = json.load(f)
+        topic_name = topic_data.get("name", "Unknown Topic")
         
+        # Load all entries
+        entries = load_entries()
+        
+        # Find entries that mention this topic
         related_entries = []
         
-        # Find entries that mention the topic or related terms
         for entry in entries:
-            content = entry.get('content', '').lower()
-            entry_date = entry.get('createdAt', '')
+            entry_content = entry.get("content", "")
+            entry_date = entry.get("createdAt", "")
             
-            # Check if the entry mentions the topic or related terms
-            if any(term in content for term in topic_related_terms):
-                # Format the date
-                try:
-                    date_obj = datetime.fromisoformat(entry_date)
-                    formatted_date = date_obj.strftime('%Y-%m-%d')
-                except (ValueError, TypeError):
-                    formatted_date = entry_date.split('T')[0] if 'T' in entry_date else entry_date
+            # Skip entries without content or date
+            if not entry_content or not entry_date:
+                continue
+            
+            # Format the date as YYYY年MM月DD日
+            try:
+                date_obj = datetime.fromisoformat(entry_date.replace('Z', '+00:00'))
+                formatted_date = f"{date_obj.year}年{date_obj.month}月{date_obj.day}日"
+            except Exception:
+                # Fallback to raw date
+                formatted_date = entry_date
+            
+            # Check if topic is mentioned in the entry
+            if topic_name.lower() in entry_content.lower():
+                # Find a relevant excerpt containing the topic name
+                topic_lower = topic_name.lower()
+                content_lower = entry_content.lower()
                 
-                # Find the most relevant excerpt - a sentence containing the topic name
-                excerpt = content
-                if len(excerpt) > 150:
-                    # Try to find a sentence containing the topic name
-                    sentences = re.split(r'(?<=[.!?])\s+', content)
-                    matching_sentences = []
+                if concise:
+                    # Extract a concise excerpt showing just the relevant text
+                    # Find all occurrences of the topic in the content
+                    positions = [m.start() for m in re.finditer(re.escape(topic_lower), content_lower)]
                     
-                    for sentence in sentences:
-                        if any(term in sentence.lower() for term in topic_related_terms):
-                            matching_sentences.append(sentence)
-                    
-                    if matching_sentences:
-                        # Use the first matching sentence as the excerpt
-                        excerpt = matching_sentences[0]
-                        if len(excerpt) > 150:
-                            excerpt = excerpt[:147] + '...'
+                    if positions:
+                        # Extract context around the first occurrence
+                        pos = positions[0]
+                        
+                        # Determine the start and end of the excerpt
+                        excerpt_start = max(0, pos - 30)
+                        excerpt_end = min(len(entry_content), pos + len(topic_name) + 30)
+                        
+                        # Find sentence boundaries or stops to make the excerpt more natural
+                        # Chinese stops: 。 ！ ？  English stops: . ! ?
+                        stops = ['。', '！', '？', '.', '!', '?']
+                        
+                        # Check if there's a stop before the topic mention
+                        text_before = entry_content[excerpt_start:pos]
+                        
+                        # Find the last stop before the topic
+                        last_stop_index = -1
+                        for stop in stops:
+                            stop_index = text_before.rfind(stop)
+                            if stop_index > last_stop_index:
+                                last_stop_index = stop_index
+                        
+                        # If we found a stop, start from just after it
+                        if last_stop_index >= 0:
+                            excerpt_start = excerpt_start + last_stop_index + 1
+                            # Skip whitespace after the stop
+                            while excerpt_start < pos and entry_content[excerpt_start].isspace():
+                                excerpt_start += 1
+                        
+                        # For the ending boundary, find the next stop after the topic
+                        text_after = entry_content[pos + len(topic_name):excerpt_end]
+                        
+                        # Find the first stop after the topic
+                        first_stop_index = len(text_after)
+                        for stop in stops:
+                            stop_index = text_after.find(stop)
+                            if stop_index >= 0 and stop_index < first_stop_index:
+                                first_stop_index = stop_index
+                        
+                        # If we found a stop, end at it (including the stop)
+                        if first_stop_index < len(text_after):
+                            excerpt_end = pos + len(topic_name) + first_stop_index + 1
+                        
+                        # Extract the context
+                        excerpt = entry_content[excerpt_start:excerpt_end].strip()
+                        
+                        # Highlight the topic name
+                        highlighted_excerpt = re.sub(
+                            f"({re.escape(topic_name)})",
+                            r"<span class='highlight'>\1</span>",
+                            excerpt,
+                            flags=re.IGNORECASE
+                        )
                     else:
-                        # If no sentence contains the topic, use the first 150 characters
-                        excerpt = content[:147] + '...'
-                
-                # Highlight the topic name in the excerpt
-                highlighted_excerpt = excerpt
-                for term in topic_related_terms:
-                    if term in excerpt.lower():
-                        # Using regex to do case-insensitive replacement while preserving case
-                        pattern = re.compile(re.escape(term), re.IGNORECASE)
-                        highlighted_excerpt = pattern.sub(lambda m: f'<span class="highlight">{m.group(0)}</span>', highlighted_excerpt)
+                        # Fallback - should rarely happen
+                        excerpt = entry_content[:100] + "..." if len(entry_content) > 100 else entry_content
+                        highlighted_excerpt = excerpt
+                else:
+                    # Use a larger excerpt for full display
+                    if len(entry_content) > 500:
+                        # Find a section containing the topic
+                        topic_pos = content_lower.find(topic_lower)
+                        if topic_pos != -1:
+                            start_pos = max(0, topic_pos - 200)
+                            end_pos = min(len(entry_content), topic_pos + 300)
+                            excerpt = entry_content[start_pos:end_pos]
+                        else:
+                            excerpt = entry_content[:500] + "..."
+                    else:
+                        excerpt = entry_content
+                    
+                    # Highlight the topic name
+                    highlighted_excerpt = re.sub(
+                        f"({re.escape(topic_name)})",
+                        r"<span class='highlight'>\1</span>",
+                        excerpt,
+                        flags=re.IGNORECASE
+                    )
                 
                 related_entries.append({
                     'id': entry.get('id'),

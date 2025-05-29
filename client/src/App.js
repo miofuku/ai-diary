@@ -526,28 +526,12 @@ function App() {
       setSelectedTheme(themeId);
       setThemeCurrentPage(1); // Reset to first page when changing themes
       
-      // 检查是否是动态主题
-      if (themeId.toString().startsWith('dynamic_')) {
-        // 找到对应的动态主题
-        const topic = dynamicTopics.find(t => t.id === themeId);
-        if (topic && topic.mentions) {
-          // 将mentions转换为themeRelatedEntries格式
-          const relatedEntries = topic.mentions.map((mention, idx) => ({
-            id: `mention_${idx}`,
-            date: mention.date,
-            title: `${topic.name} - ${new Date(mention.date).toLocaleDateString()}`,
-            excerpt: mention.excerpt
-          }));
-          setThemeRelatedEntries(relatedEntries);
-        } else {
-          // 如果找不到mentions，尝试从API获取相关条目
-          fetchTopicEntries(themeId.replace('dynamic_', ''));
-        }
-      } else if (typeof themeId === 'string') {
-        // 直接从API获取相关条目
+      // Check if the theme is a dynamic topic or static theme
+      if (typeof themeId === 'string') {
+        // Direct API call using the theme ID
         fetchTopicEntries(themeId);
       } else {
-        // 使用静态主题数据
+        // Static theme with predefined data
         setThemeRelatedEntries(themeEntryData[themeId] || []);
       }
     }
@@ -557,14 +541,34 @@ function App() {
   const fetchTopicEntries = async (topicId) => {
     try {
       setIsLoadingTopics(true);
-      const response = await fetch(`http://localhost:3001/api/topic-entries/${topicId}`);
+      const response = await fetch(`http://localhost:3001/api/topic-entries/${topicId}?concise=true`);
       
       if (response.ok) {
         const data = await response.json();
         console.log('Topic entries fetched:', data);
         
         if (data.status === 'success' && data.entries && data.entries.length > 0) {
-          setThemeRelatedEntries(data.entries);
+          // Ensure each excerpt starts and ends with ellipsis if not already present
+          const formattedEntries = data.entries.map(entry => {
+            let excerpt = entry.excerpt;
+            
+            // Make sure excerpt starts with ellipsis if it doesn't already
+            if (!excerpt.startsWith('...')) {
+              excerpt = '...' + excerpt;
+            }
+            
+            // Make sure excerpt ends with ellipsis if it doesn't already
+            if (!excerpt.endsWith('...')) {
+              excerpt = excerpt + '...';
+            }
+            
+            return {
+              ...entry,
+              excerpt: excerpt
+            };
+          });
+          
+          setThemeRelatedEntries(formattedEntries);
         } else {
           setThemeRelatedEntries([]);
         }
