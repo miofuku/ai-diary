@@ -659,6 +659,7 @@ function App() {
   // Toggle sort order
   const toggleSortOrder = () => {
     setSortNewestFirst(!sortNewestFirst);
+    setCurrentPage(1); // Reset to first page when changing sort order
   };
 
   // Get current entries for pagination
@@ -997,10 +998,7 @@ function App() {
                           <input 
                             type="checkbox" 
                             checked={sortNewestFirst}
-                            onChange={() => {
-                              setSortNewestFirst(!sortNewestFirst);
-                              setCurrentPage(1); // Reset to first page when changing sort order
-                            }}
+                            onChange={toggleSortOrder}
                           />
                           <span className="slider round"></span>
                         </label>

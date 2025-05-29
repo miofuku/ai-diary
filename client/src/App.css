@@ -596,7 +596,9 @@
 
 .selected-date-header {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 15px;
 }
 
@@ -619,9 +621,12 @@
 }
 
 .entry-content-item {
-  border-bottom: 1px solid #eee;
-  padding-bottom: 15px;
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  padding: 1.25rem;
   margin-bottom: 15px;
+  border: 1px solid #eaeaea;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .entry-content-item:last-child {
@@ -635,6 +640,7 @@
   color: #333;
   white-space: pre-line;
   font-size: 0.95rem;
+  padding: 5px;
 }
 
 .no-entry-message {
