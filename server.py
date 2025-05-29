@@ -11,7 +11,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 from openai import OpenAI
-from faster_whisper import WhisperModel
+# Temporarily disabled speech-to-text functionality
+# from faster_whisper import WhisperModel
 import os
 from dotenv import load_dotenv
 
@@ -54,16 +55,17 @@ class EntryUpdate(BaseModel):
     existingContent: Optional[str] = None
     newContent: Optional[str] = None
 
+# Temporarily disabled voice input functionality
 # Load Whisper model - use base model to reduce CPU usage
-model = None  # Initialize as None, load only when needed
+# model = None  # Initialize as None, load only when needed
 
 # Function to lazily load the model when required
-def get_whisper_model():
-    global model
-    if model is None:
-        print("Loading Whisper model (base)...")
-        model = WhisperModel("base", device="cpu", compute_type="int8")
-    return model
+# def get_whisper_model():
+#     global model
+#     if model is None:
+#         print("Loading Whisper model (base)...")
+#         model = WhisperModel("base", device="cpu", compute_type="int8")
+#     return model
 
 # Data path - create data directory if it doesn't exist
 data_dir = Path('./data')
@@ -174,53 +176,54 @@ Guidelines:
         # Fallback to simple concatenation
         return f"{existing_content}\n\n{new_content}"
 
+# Temporarily disabled voice input functionality
 # Update the transcribe endpoint to be more CPU-efficient
-@app.post("/transcribe")
-async def transcribe_audio(
-    audio: UploadFile = File(...),
-    language: str = Form(None)
-):
-    # Save uploaded file temporarily
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_file:
-        temp_file.write(await audio.read())
-        temp_path = temp_file.name
-    
-    try:
-        # Get or load the model
-        whisper_model = get_whisper_model()
-        
-        # Map language codes correctly - use only valid Whisper language codes
-        whisper_language = None
-        if language:
-            # Whisper only accepts 'zh' for Chinese (both simplified and traditional)
-            # No need to map to 'zh-cn' as that's not a valid Whisper language code
-            whisper_language = language
-        
-        print(f"Transcribing with language: {whisper_language}")
-        
-        # Use most efficient settings
-        segments, _ = whisper_model.transcribe(
-            temp_path, 
-            language=whisper_language,
-            beam_size=1,
-            best_of=1,
-            vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=500),
-            word_timestamps=False
-        )
-        
-        # Collect transcribed text
-        result = " ".join([segment.text for segment in segments])
-        
-        return {"text": result}
-    finally:
-        # Clean up temp file
-        if os.path.exists(temp_path):
-            os.unlink(temp_path)
-        
-        # Force garbage collection to free memory
-        import gc
-        gc.collect()
+# @app.post("/transcribe")
+# async def transcribe_audio(
+#     audio: UploadFile = File(...),
+#     language: str = Form(None)
+# ):
+#     # Save uploaded file temporarily
+#     with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_file:
+#         temp_file.write(await audio.read())
+#         temp_path = temp_file.name
+#     
+#     try:
+#         # Get or load the model
+#         whisper_model = get_whisper_model()
+#         
+#         # Map language codes correctly - use only valid Whisper language codes
+#         whisper_language = None
+#         if language:
+#             # Whisper only accepts 'zh' for Chinese (both simplified and traditional)
+#             # No need to map to 'zh-cn' as that's not a valid Whisper language code
+#             whisper_language = language
+#         
+#         print(f"Transcribing with language: {whisper_language}")
+#         
+#         # Use most efficient settings
+#         segments, _ = whisper_model.transcribe(
+#             temp_path, 
+#             language=whisper_language,
+#             beam_size=1,
+#             best_of=1,
+#             vad_filter=True,
+#             vad_parameters=dict(min_silence_duration_ms=500),
+#             word_timestamps=False
+#         )
+#         
+#         # Collect transcribed text
+#         result = " ".join([segment.text for segment in segments])
+#         
+#         return {"text": result}
+#     finally:
+#         # Clean up temp file
+#         if os.path.exists(temp_path):
+#             os.unlink(temp_path)
+#         
+#         # Force garbage collection to free memory
+#         import gc
+#         gc.collect()
 
 # DIARY MANAGEMENT ENDPOINTS
 
