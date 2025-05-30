@@ -894,9 +894,6 @@ function App() {
                     <div className="loading-topics">正在加载主题...</div>
                   ) : (
                     <>
-                      <div className="themes-header">
-                        <div className="themes-title">热门主题</div>
-                      </div>
                       <div className="theme-tags">
                         {/* 优先显示动态主题，如果没有则显示静态主题 */}
                         {(dynamicTopics.length > 0 ? dynamicTopics : staticThemes).map(theme => (
