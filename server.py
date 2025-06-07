@@ -858,7 +858,7 @@ async def extract_topics_endpoint():
             return {"status": "error", "message": "No diary entries found"}
         
         # Extract topics using OpenAI
-        topics_result = await extract_topics(entries)
+        topics_result = await extract_topics_from_entries(entries)
         
         # Update the topic graph
         update_topic_graph(topics_result)
@@ -886,7 +886,7 @@ def load_entries():
         print(f"Error loading entries: {str(e)}")
         return []
 
-async def extract_topics(entries):
+async def extract_topics_from_entries(entries):
     """
     Extract topics from diary entries using OpenAI
     """
