@@ -40,11 +40,23 @@ app.add_middleware(
 )
 
 # Configure OpenAI client
+client = None
 try:
-    client = OpenAI(
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
-    print("OpenAI client initialized successfully")
+    api_key = os.getenv("OPENAI_API_KEY")
+    if api_key:
+        # Try different initialization methods
+        try:
+            client = OpenAI(api_key=api_key)
+            print("OpenAI client initialized successfully")
+        except TypeError as te:
+            # If there's a TypeError, try with minimal parameters
+            print(f"Trying alternative OpenAI initialization due to: {te}")
+            import openai
+            openai.api_key = api_key
+            client = openai
+            print("OpenAI client initialized with legacy method")
+    else:
+        print("Warning: OPENAI_API_KEY not found in environment variables")
 except Exception as e:
     print(f"Warning: Failed to initialize OpenAI client: {e}")
     client = None
@@ -242,12 +254,15 @@ def extract_topics(content: str) -> dict:
             print("OpenAI client is not available")
             return {"topics": [], "people": [], "relations": []}
 
-        response = client.chat.completions.create(
-            model="gpt-4o",  # Using GPT-4o for better entity recognition
-            messages=[
-                {
-                    "role": "system", 
-                    "content": """You are an intelligent diary topic extraction assistant. Your goal is to create granular, specific topics that can be easily organized and deduplicated. Analyze the provided diary entry to identify:
+        # Handle both new and legacy OpenAI client
+        if hasattr(client, 'chat'):
+            # New OpenAI client
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """You are an intelligent diary topic extraction assistant. Your goal is to create granular, specific topics that can be easily organized and deduplicated. Analyze the provided diary entry to identify:
 
 1. TOPICS: Extract very specific, atomic topics. Break down complex subjects into individual components.
 2. PEOPLE: Extract individual person names only (not groups or relationships)
@@ -323,8 +338,94 @@ IMPORTANT RULES:
             temperature=0.3,
             response_format={"type": "json_object"}
         )
-        
-        result = json.loads(response.choices[0].message.content)
+        else:
+            # Legacy OpenAI client
+            response = client.ChatCompletion.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": """You are an intelligent diary topic extraction assistant. Your goal is to create granular, specific topics that can be easily organized and deduplicated. Analyze the provided diary entry to identify:
+
+1. TOPICS: Extract very specific, atomic topics. Break down complex subjects into individual components.
+2. PEOPLE: Extract individual person names only (not groups or relationships)
+3. RELATIONS: Connections between topics and people
+
+TOPIC EXTRACTION PRINCIPLES:
+- Make each topic as SMALL and SPECIFIC as possible
+- Extract individual person names separately from person-related activities
+- Break down compound topics into atomic components
+- Use consistent naming (e.g., always use full names, consistent terminology)
+- Avoid generic terms - be specific
+
+Examples of GOOD topic extraction:
+- Instead of "Liu Jian项目": Extract "Liu Jian" (person) + "项目管理" (topic) + "工作协作" (topic)
+- Instead of "智能OA系统开发": Extract "OA系统" (topic) + "系统开发" (topic) + "智能化" (topic)
+- Instead of "杭州旅行": Extract "杭州" (place) + "旅行" (activity)
+
+Extract these elements in a structured JSON format:
+{
+  "topics": [
+    {
+      "id": "unique_string_id",
+      "name": "Specific Topic Name",
+      "type": "concept|activity|object|skill|technology|event",
+      "category": "projects|places|activities|concepts|technologies|skills",
+      "importance": 1-5,
+      "sentiment": -2 to +2,
+      "context": "Brief context",
+      "keywords": ["keyword1", "keyword2"]
+    }
+  ],
+  "people": [
+    {
+      "id": "unique_string_id",
+      "name": "Full Person Name",
+      "category": "people",
+      "role": "relationship to author",
+      "importance": 1-5,
+      "aliases": ["nickname1", "nickname2"]
+    }
+  ],
+  "relations": [
+    {
+      "source": "topic_or_person_id",
+      "target": "topic_or_person_id",
+      "type": "works_on|collaborates_with|located_in|uses|participates_in",
+      "strength": 1-5
+    }
+  ]
+}
+
+CATEGORIES:
+- "projects": Work/personal projects, ongoing initiatives
+- "places": Specific locations, venues, cities, countries
+- "activities": Actions, events, experiences, hobbies
+- "concepts": Ideas, methodologies, abstract concepts
+- "technologies": Tools, software, technical systems
+- "skills": Abilities, competencies, learning areas
+
+IMPORTANT RULES:
+1. Extract topics in the original language (Chinese/English)
+2. Person names should be individual entities, not groups
+3. Break down complex topics into atomic components
+4. Use consistent naming conventions
+5. Add keywords to help with similarity detection
+6. Create relations only for clear, direct connections"""
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Extract topics, people and relations from this diary entry: {content}"
+                    }
+                ],
+                temperature=0.3
+            )
+
+        # Handle response from both client types
+        if hasattr(response, 'choices'):
+            result = json.loads(response.choices[0].message.content)
+        else:
+            result = json.loads(response['choices'][0]['message']['content'])
 
         # Generate consistent IDs for topics and people
         existing_ids = set()
