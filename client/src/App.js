@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './App.css';
 import DiaryCalendar from './components/DiaryCalendar';
 import TopicDiaries from './components/TopicDiaries';
+import TopicGraph from './components/TopicGraph';
 
 function App() {
   const [entries, setEntries] = useState([]);
@@ -608,7 +609,7 @@ function App() {
               href="#" 
               className={`nav-link ${activeTab === 'diary' ? 'active' : ''}`}
               onClick={() => handleTabChange('diary')}
-            >日记</a>
+            >主题</a>
             <a 
               href="#" 
               className={`nav-link ${activeTab === 'calendar' ? 'active' : ''}`}
@@ -616,10 +617,7 @@ function App() {
             >日历</a>
           </nav>
         </div>
-        <button className="new-project-button">
-          <span className="plus-icon">+</span>
-          <span>新条目</span>
-        </button>
+
       </header>
       
       <div className="app-container">
@@ -627,8 +625,8 @@ function App() {
           <div className="content-inner">
             <div className="page-header">
               <h1>{
-                  activeTab === 'home' ? '首页' : 
-                  activeTab === 'diary' ? '日记' : 
+                  activeTab === 'home' ? '首页' :
+                  activeTab === 'diary' ? '主题' :
                   '日历'}</h1>
             </div>
 
@@ -873,88 +871,20 @@ function App() {
               </>
             )}
 
-            {/* Diary tab content */}
+            {/* Topic Graph tab content */}
             {activeTab === 'diary' && !editingEntryId && (
-              <>
-                {showTopicDiaries ? (
-                  <TopicDiaries
-                    topics={dynamicTopics}
-                    selectedTopicId={selectedTheme}
-                    onTopicSelect={(topicId) => setSelectedTheme(topicId)}
-                    onBack={() => setShowTopicDiaries(false)}
-                  />
-                ) : (
-                  <div className="selected-date-entry">
-                    <div className="selected-date-header">
-                      <div className="selected-date">{formatDate(selectedDate)}</div>
-                      <div className="sort-toggle">
-                        <span className={!sortNewestFirst ? 'active' : ''}>最早</span>
-                        <label className="switch">
-                          <input 
-                            type="checkbox" 
-                            checked={sortNewestFirst}
-                            onChange={toggleSortOrder}
-                          />
-                          <span className="slider round"></span>
-                        </label>
-                        <span className={sortNewestFirst ? 'active' : ''}>最新</span>
-                      </div>
-                    </div>
-                    
-                    {filteredEntries.length > 0 ? (
-                      <>
-                        <div className="entry-content-list">
-                          {getCurrentEntries().map((entry) => (
-                            <div key={entry.id} className="entry-content-item">
-                              <div 
-                                className="entry-content"
-                                dangerouslySetInnerHTML={renderMarkdown(entry.content)}
-                              />
-                              <div className="entry-actions">
-                                <button 
-                                  onClick={() => startEditing(entry)} 
-                                  className="edit-button"
-                                >
-                                  编辑
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        
-                        {/* Pagination */}
-                        {filteredEntries.length > entriesPerPage && (
-                          <div className="pagination">
-                            {Array.from({ length: Math.ceil(filteredEntries.length / entriesPerPage) }).map((_, index) => (
-                              <button
-                                key={index}
-                                onClick={() => paginate(index + 1)}
-                                className={`page-button ${currentPage === index + 1 ? 'active' : ''}`}
-                              >
-                                {index + 1}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="no-entry-message">
-                        这一天还没有日记内容
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
+              <TopicGraph />
             )}
           </div>
         </main>
 
         <aside className="calendar-container">
           <h2 className="calendar-title">日历</h2>
-          <DiaryCalendar 
-            entries={entries} 
-            onDateSelect={handleDateSelect} 
+          <DiaryCalendar
+            entries={entries}
+            onDateSelect={handleDateSelect}
             selectedDate={selectedDate}
+            onTabChange={handleTabChange}
           />
         </aside>
       </div>

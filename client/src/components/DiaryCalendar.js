@@ -4,7 +4,7 @@ import { SolarDay } from 'tyme4ts';
 import 'react-calendar/dist/Calendar.css';
 import '../styles/DiaryCalendar.css';
 
-function DiaryCalendar({ entries, onDateSelect, selectedDate }) {
+function DiaryCalendar({ entries, onDateSelect, selectedDate, onTabChange }) {
   // 创建日期条目的映射
   const datesWithEntries = entries.reduce((acc, entry) => {
     if (entry && entry.createdAt) {
@@ -408,7 +408,7 @@ function HardcodedYiJi({ selectedDate }) {
         </div>
       </div>
       <div className="almanac-more">
-                <a href="#">查看详情 →</a>
+                <a href="#" onClick={(e) => { e.preventDefault(); onTabChange && onTabChange('calendar'); }}>查看详情 →</a>
       </div>
     </div>
   );
