@@ -40,10 +40,14 @@ app.add_middleware(
 )
 
 # Configure OpenAI client
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    http_client=None  # Use the default HTTP client without custom parameters
-)
+try:
+    client = OpenAI(
+        api_key=os.getenv("OPENAI_API_KEY")
+    )
+    print("OpenAI client initialized successfully")
+except Exception as e:
+    print(f"Warning: Failed to initialize OpenAI client: {e}")
+    client = None
 
 # Data models
 class Entry(BaseModel):
@@ -232,61 +236,84 @@ def extract_topics(content: str) -> dict:
         if not USE_AI_FOR_TOPICS:
             print("AI topic extraction is disabled by configuration")
             return {"topics": [], "people": [], "relations": []}
-        
+
+        # Check if OpenAI client is available
+        if client is None:
+            print("OpenAI client is not available")
+            return {"topics": [], "people": [], "relations": []}
+
         response = client.chat.completions.create(
             model="gpt-4o",  # Using GPT-4o for better entity recognition
             messages=[
                 {
                     "role": "system", 
-                    "content": """You are a diary topic extraction assistant. Analyze the provided diary entry to identify:
+                    "content": """You are an intelligent diary topic extraction assistant. Your goal is to create granular, specific topics that can be easily organized and deduplicated. Analyze the provided diary entry to identify:
 
-1. TOPICS: Important subjects, themes, activities, projects, or concepts mentioned
-2. PEOPLE: Any people mentioned (real or fictional)
+1. TOPICS: Extract very specific, atomic topics. Break down complex subjects into individual components.
+2. PEOPLE: Extract individual person names only (not groups or relationships)
 3. RELATIONS: Connections between topics and people
 
-Extract these elements in a structured JSON format with the following schema:
+TOPIC EXTRACTION PRINCIPLES:
+- Make each topic as SMALL and SPECIFIC as possible
+- Extract individual person names separately from person-related activities
+- Break down compound topics into atomic components
+- Use consistent naming (e.g., always use full names, consistent terminology)
+- Avoid generic terms - be specific
+
+Examples of GOOD topic extraction:
+- Instead of "Liu Jian项目": Extract "Liu Jian" (person) + "项目管理" (topic) + "工作协作" (topic)
+- Instead of "智能OA系统开发": Extract "OA系统" (topic) + "系统开发" (topic) + "智能化" (topic)
+- Instead of "杭州旅行": Extract "杭州" (place) + "旅行" (activity)
+
+Extract these elements in a structured JSON format:
 {
   "topics": [
     {
       "id": "unique_string_id",
-      "name": "Topic Name",
-      "type": "category", 
-      "category": "projects|places|activities",
-      "importance": 1-5 scale,
-      "sentiment": -2 to +2 scale,
-      "context": "Brief context about this topic"
+      "name": "Specific Topic Name",
+      "type": "concept|activity|object|skill|technology|event",
+      "category": "projects|places|activities|concepts|technologies|skills",
+      "importance": 1-5,
+      "sentiment": -2 to +2,
+      "context": "Brief context",
+      "keywords": ["keyword1", "keyword2"]
     }
   ],
   "people": [
     {
       "id": "unique_string_id",
-      "name": "Person Name",
+      "name": "Full Person Name",
       "category": "people",
       "role": "relationship to author",
-      "importance": 1-5 scale
+      "importance": 1-5,
+      "aliases": ["nickname1", "nickname2"]
     }
   ],
   "relations": [
     {
       "source": "topic_or_person_id",
       "target": "topic_or_person_id",
-      "type": "relationship type",
-      "strength": 1-5 scale
+      "type": "works_on|collaborates_with|located_in|uses|participates_in",
+      "strength": 1-5
     }
   ]
 }
 
-For the "category" field, categorize each topic into one of these categories:
-- "projects": Work projects, personal projects, ongoing activities with goals
-- "places": Locations, venues, cities, countries, or any physical places
-- "activities": One-time activities, events, experiences
-- "people": All people should be in the people array with this category
+CATEGORIES:
+- "projects": Work/personal projects, ongoing initiatives
+- "places": Specific locations, venues, cities, countries
+- "activities": Actions, events, experiences, hobbies
+- "concepts": Ideas, methodologies, abstract concepts
+- "technologies": Tools, software, technical systems
+- "skills": Abilities, competencies, learning areas
 
-IMPORTANT: 
-1. If the text is in Chinese, extract topics in Chinese. Do not translate.
-2. Keep the response concise and focused only on clearly mentioned entities.
-3. Assign appropriate categories to help organize the topics.
-4. Create meaningful relations only when there's clear connection in the text."""
+IMPORTANT RULES:
+1. Extract topics in the original language (Chinese/English)
+2. Person names should be individual entities, not groups
+3. Break down complex topics into atomic components
+4. Use consistent naming conventions
+5. Add keywords to help with similarity detection
+6. Create relations only for clear, direct connections"""
                 },
                 {
                     "role": "user",
@@ -298,51 +325,413 @@ IMPORTANT:
         )
         
         result = json.loads(response.choices[0].message.content)
+
+        # Generate consistent IDs for topics and people
+        existing_ids = set()
+
+        # Process topics
+        for topic in result.get('topics', []):
+            if not topic.get('id') or topic['id'].startswith('t') or topic['id'].startswith('topic_'):
+                # Generate new ID
+                base_id = generate_topic_id(topic['name'], 'topic')
+                topic['id'] = ensure_unique_id(base_id, existing_ids)
+                existing_ids.add(topic['id'])
+            else:
+                existing_ids.add(topic['id'])
+
+        # Process people
+        for person in result.get('people', []):
+            if not person.get('id') or person['id'].startswith('p') or person['id'].startswith('person_'):
+                # Generate new ID
+                base_id = generate_topic_id(person['name'], 'person')
+                person['id'] = ensure_unique_id(base_id, existing_ids)
+                existing_ids.add(person['id'])
+            else:
+                existing_ids.add(person['id'])
+
         print(f"Topics extracted successfully: {len(result.get('topics', []))} topics, {len(result.get('people', []))} people")
-        
+
         # Update the topic graph with new data
         update_topic_graph(result)
-        
+
         return result
     except Exception as e:
         print(f"Error extracting topics: {e}")
         # If extraction fails, return empty results
         return {"topics": [], "people": [], "relations": []}
 
+# Intelligent ID generation functions
+def generate_topic_id(name, topic_type="topic"):
+    """
+    Generate a consistent, descriptive ID for topics and people
+    """
+    import re
+    import unicodedata
+    import hashlib
+
+    # Normalize the name
+    normalized = unicodedata.normalize('NFKC', name.strip())
+
+    # Remove special characters and convert to lowercase
+    clean_name = re.sub(r'[^\w\u4e00-\u9fff\s]', '', normalized.lower())
+
+    # Replace spaces with underscores and remove extra whitespace
+    clean_name = re.sub(r'\s+', '_', clean_name.strip())
+
+    # For Chinese text, use pinyin-like approach or keep Chinese characters
+    # For now, we'll keep Chinese characters and use a hash for uniqueness
+    if re.search(r'[\u4e00-\u9fff]', clean_name):
+        # For Chinese names, create a shorter hash-based ID
+        base_id = clean_name[:20]  # Keep first 20 chars
+        hash_suffix = hashlib.md5(name.encode('utf-8')).hexdigest()[:6]
+        topic_id = f"{base_id}_{hash_suffix}"
+    else:
+        # For English names, use the clean name directly
+        topic_id = clean_name[:30]  # Limit length
+
+    # Add type prefix for clarity
+    if topic_type == "person":
+        topic_id = f"person_{topic_id}"
+    elif topic_type == "topic":
+        topic_id = f"topic_{topic_id}"
+
+    return topic_id
+
+def ensure_unique_id(base_id, existing_ids):
+    """
+    Ensure the ID is unique by adding a counter if necessary
+    """
+    if base_id not in existing_ids:
+        return base_id
+
+    counter = 1
+    while f"{base_id}_{counter}" in existing_ids:
+        counter += 1
+
+    return f"{base_id}_{counter}"
+
+# Topic similarity detection and merging functions
+def calculate_topic_similarity(topic1, topic2):
+    """
+    Enhanced similarity calculation for better duplicate detection
+    Returns a score between 0 and 1
+    """
+    import re
+    import unicodedata
+
+    name1 = topic1.get("name", "").strip()
+    name2 = topic2.get("name", "").strip()
+
+    # Normalize unicode characters (important for Chinese text)
+    name1_norm = unicodedata.normalize('NFKC', name1).lower()
+    name2_norm = unicodedata.normalize('NFKC', name2).lower()
+
+    # Exact match (case-insensitive, normalized)
+    if name1_norm == name2_norm:
+        return 1.0
+
+    # Check for exact match ignoring punctuation and spaces
+    name1_clean = re.sub(r'[^\w\u4e00-\u9fff]', '', name1_norm)
+    name2_clean = re.sub(r'[^\w\u4e00-\u9fff]', '', name2_norm)
+
+    if name1_clean == name2_clean:
+        return 0.95
+
+    # For people, be more strict about name matching
+    if (topic1.get("type") == "person" and topic2.get("type") == "person") or \
+       (topic1.get("category") == "people" and topic2.get("category") == "people"):
+        # Check if names are subsets of each other (e.g., "刘健" vs "刘健老师")
+        if name1_clean in name2_clean or name2_clean in name1_clean:
+            return 0.9
+
+        # Check aliases
+        aliases1 = set([alias.lower().strip() for alias in topic1.get("aliases", [])])
+        aliases2 = set([alias.lower().strip() for alias in topic2.get("aliases", [])])
+
+        if name1_norm in aliases2 or name2_norm in aliases1:
+            return 0.9
+
+        if aliases1.intersection(aliases2):
+            return 0.85
+
+    # Enhanced keyword similarity
+    keywords1 = set([kw.lower().strip() for kw in topic1.get("keywords", [])])
+    keywords2 = set([kw.lower().strip() for kw in topic2.get("keywords", [])])
+
+    if keywords1 and keywords2:
+        keyword_overlap = len(keywords1.intersection(keywords2)) / len(keywords1.union(keywords2))
+        if keyword_overlap > 0.7:
+            return 0.8
+        elif keyword_overlap > 0.5:
+            return 0.6
+
+    # Check if one name contains the other (for non-people)
+    if topic1.get("type") != "person" and topic2.get("type") != "person":
+        if name1_clean in name2_clean or name2_clean in name1_clean:
+            # Calculate containment ratio
+            shorter = min(len(name1_clean), len(name2_clean))
+            longer = max(len(name1_clean), len(name2_clean))
+            if shorter / longer > 0.7:  # At least 70% overlap
+                return 0.75
+
+    # Enhanced Chinese character similarity
+    chars1 = set(re.findall(r'[\u4e00-\u9fff]', name1_norm))
+    chars2 = set(re.findall(r'[\u4e00-\u9fff]', name2_norm))
+
+    if chars1 and chars2 and len(chars1) >= 2 and len(chars2) >= 2:
+        char_overlap = len(chars1.intersection(chars2)) / len(chars1.union(chars2))
+        if char_overlap > 0.8:
+            return 0.7
+        elif char_overlap > 0.6:
+            return 0.5
+
+    # Enhanced English word similarity
+    words1 = set(re.findall(r'[a-zA-Z]+', name1_norm))
+    words2 = set(re.findall(r'[a-zA-Z]+', name2_norm))
+
+    if words1 and words2:
+        word_overlap = len(words1.intersection(words2)) / len(words1.union(words2))
+        if word_overlap > 0.8:
+            return 0.7
+        elif word_overlap > 0.6:
+            return 0.5
+
+    # Context similarity (if available)
+    context1 = topic1.get("context", "").lower().strip()
+    context2 = topic2.get("context", "").lower().strip()
+
+    if context1 and context2 and len(context1) > 10 and len(context2) > 10:
+        # Simple word overlap in context
+        words_ctx1 = set(re.findall(r'[\w\u4e00-\u9fff]+', context1))
+        words_ctx2 = set(re.findall(r'[\w\u4e00-\u9fff]+', context2))
+
+        if words_ctx1 and words_ctx2:
+            ctx_overlap = len(words_ctx1.intersection(words_ctx2)) / len(words_ctx1.union(words_ctx2))
+            if ctx_overlap > 0.5:
+                return 0.4
+
+    return 0.0
+
+def merge_similar_topics(topics):
+    """
+    Merge similar topics and return deduplicated list with improved thresholds
+    """
+    if not topics:
+        return topics
+
+    merged_topics = []
+    used_indices = set()
+
+    for i, topic in enumerate(topics):
+        if i in used_indices:
+            continue
+
+        # Find similar topics
+        similar_topics = [topic]
+        similar_indices = [i]
+
+        for j, other_topic in enumerate(topics[i+1:], i+1):
+            if j in used_indices:
+                continue
+
+            similarity = calculate_topic_similarity(topic, other_topic)
+
+            # Use different thresholds based on topic type
+            merge_threshold = 0.85  # Default threshold
+            if topic.get("type") == "person" or topic.get("category") == "people":
+                merge_threshold = 0.9  # Higher threshold for people (be more careful)
+            elif topic.get("category") in ["technologies", "skills"]:
+                merge_threshold = 0.8  # Slightly lower for tech/skills
+
+            if similarity >= merge_threshold:
+                similar_topics.append(other_topic)
+                similar_indices.append(j)
+
+        # Merge similar topics
+        if len(similar_topics) > 1:
+            merged_topic = merge_topic_group(similar_topics)
+            merged_topics.append(merged_topic)
+            used_indices.update(similar_indices)
+        else:
+            merged_topics.append(topic)
+            used_indices.add(i)
+
+    return merged_topics
+
+# Topic cleanup and deduplication utility
+def cleanup_existing_topics():
+    """
+    Clean up existing duplicate topics in the topic graph
+    """
+    try:
+        # Load existing topic graph
+        with open(graph_path, "r", encoding="utf-8") as f:
+            graph_data = json.load(f)
+
+        nodes = graph_data.get("nodes", [])
+        edges = graph_data.get("edges", [])
+
+        # Separate topics and people
+        topics = [node for node in nodes if node.get("type") == "topic"]
+        people = [node for node in nodes if node.get("type") == "person"]
+        other_nodes = [node for node in nodes if node.get("type") not in ["topic", "person"]]
+
+        print(f"Before cleanup: {len(topics)} topics, {len(people)} people")
+
+        # Merge similar topics
+        merged_topics = merge_similar_topics(topics)
+        merged_people = merge_similar_topics(people)
+
+        print(f"After cleanup: {len(merged_topics)} topics, {len(merged_people)} people")
+
+        # Create mapping of old IDs to new IDs for edge updates
+        id_mapping = {}
+
+        # Map old topic IDs to merged topic IDs
+        for merged_topic in merged_topics:
+            for original_topic in topics:
+                if calculate_topic_similarity(merged_topic, original_topic) >= 0.85:
+                    id_mapping[original_topic["id"]] = merged_topic["id"]
+
+        # Map old people IDs to merged people IDs
+        for merged_person in merged_people:
+            for original_person in people:
+                if calculate_topic_similarity(merged_person, original_person) >= 0.9:
+                    id_mapping[original_person["id"]] = merged_person["id"]
+
+        # Update edges with new IDs
+        updated_edges = []
+        for edge in edges:
+            source_id = id_mapping.get(edge["source"], edge["source"])
+            target_id = id_mapping.get(edge["target"], edge["target"])
+
+            # Only keep edge if both nodes still exist
+            all_node_ids = {node["id"] for node in merged_topics + merged_people + other_nodes}
+            if source_id in all_node_ids and target_id in all_node_ids:
+                updated_edge = edge.copy()
+                updated_edge["source"] = source_id
+                updated_edge["target"] = target_id
+                updated_edges.append(updated_edge)
+
+        # Remove duplicate edges
+        seen_edges = set()
+        final_edges = []
+        for edge in updated_edges:
+            edge_key = f"{edge['source']}-{edge['target']}-{edge.get('type', '')}"
+            if edge_key not in seen_edges:
+                seen_edges.add(edge_key)
+                final_edges.append(edge)
+
+        # Update graph data
+        graph_data["nodes"] = merged_topics + merged_people + other_nodes
+        graph_data["edges"] = final_edges
+
+        # Save cleaned up graph
+        with open(graph_path, "w", encoding="utf-8") as f:
+            json.dump(graph_data, f, ensure_ascii=False, indent=2)
+
+        print(f"Topic cleanup complete. Removed {len(topics) - len(merged_topics)} duplicate topics and {len(people) - len(merged_people)} duplicate people")
+        print(f"Updated {len(final_edges)} edges")
+
+        return {
+            "original_topics": len(topics),
+            "merged_topics": len(merged_topics),
+            "original_people": len(people),
+            "merged_people": len(merged_people),
+            "final_edges": len(final_edges)
+        }
+
+    except Exception as e:
+        print(f"Error during topic cleanup: {e}")
+        return {"error": str(e)}
+
+def merge_topic_group(topic_group):
+    """
+    Merge a group of similar topics into one
+    """
+    if not topic_group:
+        return None
+
+    # Use the most specific/longest name
+    best_name = max(topic_group, key=lambda t: len(t.get("name", "")))["name"]
+
+    # Combine keywords
+    all_keywords = set()
+    for topic in topic_group:
+        all_keywords.update(topic.get("keywords", []))
+
+    # Average importance and sentiment
+    importances = [t.get("importance", 3) for t in topic_group]
+    sentiments = [t.get("sentiment", 0) for t in topic_group]
+
+    avg_importance = sum(importances) / len(importances)
+    avg_sentiment = sum(sentiments) / len(sentiments)
+
+    # Combine contexts
+    contexts = [t.get("context", "") for t in topic_group if t.get("context")]
+    combined_context = "; ".join(contexts) if contexts else ""
+
+    # Use the first topic as base and update with merged data
+    merged_topic = topic_group[0].copy()
+    merged_topic.update({
+        "name": best_name,
+        "keywords": list(all_keywords),
+        "importance": round(avg_importance),
+        "sentiment": round(avg_sentiment, 2),
+        "context": combined_context[:200] + "..." if len(combined_context) > 200 else combined_context
+    })
+
+    return merged_topic
+
 # Update topic graph with new topics
 def update_topic_graph(topics_result):
     """
     Update the topic graph with new topics, people, and relations
+    Includes intelligent deduplication and merging
     """
     # Ensure the topic graph file exists
     ensure_data_file()
-    
+
     # Load existing topic graph
     with open(graph_path, "r", encoding="utf-8") as f:
         graph_data = json.load(f)
-    
+
     existing_nodes = {node["id"]: node for node in graph_data.get("nodes", [])}
     existing_edges = []
-    
+
     for edge in graph_data.get("edges", []):
         edge_key = f"{edge['source']}-{edge['target']}-{edge.get('type', '')}"
         existing_edges.append(edge_key)
-    
+
+    # Merge similar topics in the new data
+    new_topics = merge_similar_topics(topics_result.get("topics", []))
+
     # Add or update topics
-    for topic in topics_result.get("topics", []):
-        if topic["id"] in existing_nodes:
-            # Update existing topic
-            existing_nodes[topic["id"]].update({
-                "name": topic["name"],
-                "type": "topic",
-                "category": topic.get("category", "activities"),
-                "topicType": topic.get("type", "concept"),
-                "importance": topic.get("importance", 3),
-                "sentiment": topic.get("sentiment", 0),
-                "context": topic.get("context", "")
-            })
-        else:
-            # Add new topic
+    for topic in new_topics:
+        # Check if this topic is similar to any existing topic
+        merged_with_existing = False
+
+        for existing_id, existing_node in existing_nodes.items():
+            if existing_node.get("type") == "topic":
+                similarity = calculate_topic_similarity(topic, existing_node)
+                if similarity > 0.7:
+                    # Merge with existing topic
+                    merged_topic = merge_topic_group([topic, existing_node])
+                    existing_nodes[existing_id].update({
+                        "name": merged_topic["name"],
+                        "type": "topic",
+                        "category": merged_topic.get("category", "activities"),
+                        "topicType": merged_topic.get("type", "concept"),
+                        "importance": merged_topic.get("importance", 3),
+                        "sentiment": merged_topic.get("sentiment", 0),
+                        "context": merged_topic.get("context", ""),
+                        "keywords": merged_topic.get("keywords", [])
+                    })
+                    merged_with_existing = True
+                    break
+
+        if not merged_with_existing:
+            # Add as new topic
             existing_nodes[topic["id"]] = {
                 "id": topic["id"],
                 "name": topic["name"],
@@ -351,21 +740,44 @@ def update_topic_graph(topics_result):
                 "topicType": topic.get("type", "concept"),
                 "importance": topic.get("importance", 3),
                 "sentiment": topic.get("sentiment", 0),
-                "context": topic.get("context", "")
+                "context": topic.get("context", ""),
+                "keywords": topic.get("keywords", [])
             }
-    
-    # Add or update people
+
+    # Add or update people (with alias checking)
     for person in topics_result.get("people", []):
-        if person["id"] in existing_nodes:
-            # Update existing person
-            existing_nodes[person["id"]].update({
-                "name": person["name"],
-                "type": "person",
-                "category": "people",
-                "role": person.get("role", ""),
-                "importance": person.get("importance", 3)
-            })
-        else:
+        # Check for existing person with same name or alias
+        merged_with_existing = False
+        person_name = person["name"].lower().strip()
+
+        for existing_id, existing_node in existing_nodes.items():
+            if existing_node.get("type") == "person":
+                existing_name = existing_node.get("name", "").lower().strip()
+                existing_aliases = [alias.lower().strip() for alias in existing_node.get("aliases", [])]
+
+                if (person_name == existing_name or
+                    person_name in existing_aliases or
+                    existing_name in person.get("aliases", [])):
+
+                    # Merge aliases
+                    all_aliases = set(existing_node.get("aliases", []))
+                    all_aliases.update(person.get("aliases", []))
+                    if existing_name != person_name:
+                        all_aliases.add(existing_name)
+                        all_aliases.add(person["name"])
+
+                    existing_nodes[existing_id].update({
+                        "name": person["name"],  # Use the new name as primary
+                        "type": "person",
+                        "category": "people",
+                        "role": person.get("role", existing_node.get("role", "")),
+                        "importance": max(person.get("importance", 3), existing_node.get("importance", 3)),
+                        "aliases": list(all_aliases)
+                    })
+                    merged_with_existing = True
+                    break
+
+        if not merged_with_existing:
             # Add new person
             existing_nodes[person["id"]] = {
                 "id": person["id"],
@@ -373,18 +785,19 @@ def update_topic_graph(topics_result):
                 "type": "person",
                 "category": "people",
                 "role": person.get("role", ""),
-                "importance": person.get("importance", 3)
+                "importance": person.get("importance", 3),
+                "aliases": person.get("aliases", [])
             }
-    
+
     # Add new relations
     new_edges = []
     for relation in topics_result.get("relations", []):
         edge_key = f"{relation['source']}-{relation['target']}-{relation.get('type', '')}"
-        
+
         # Skip if this exact edge already exists
         if edge_key in existing_edges:
             continue
-            
+
         # Add new edge
         new_edges.append({
             "source": relation["source"],
@@ -392,11 +805,11 @@ def update_topic_graph(topics_result):
             "type": relation.get("type", "related_to"),
             "strength": relation.get("strength", 3)
         })
-    
+
     # Update the graph data
     graph_data["nodes"] = list(existing_nodes.values())
     graph_data["edges"] = graph_data.get("edges", []) + new_edges
-    
+
     # Save the updated graph
     with open(graph_path, "w", encoding="utf-8") as f:
         json.dump(graph_data, f, ensure_ascii=False, indent=2)
@@ -838,6 +1251,19 @@ def analyze_topic_threads(entries):
         print(f"Error analyzing topic threads: {e}")
         return {"topics": []}
 
+# Topic cleanup endpoint
+@app.post("/api/cleanup-topics")
+async def cleanup_topics_endpoint():
+    """
+    Clean up duplicate topics in the topic graph
+    """
+    try:
+        result = cleanup_existing_topics()
+        return {"success": True, "result": result}
+    except Exception as e:
+        print(f"Error in topic cleanup endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Extract topics from text endpoint
 @app.post("/api/extract-topics")
 async def extract_topics_endpoint():
@@ -874,6 +1300,150 @@ async def extract_topics_endpoint():
         print(f"Error extracting topics: {str(e)}")
         return {"status": "error", "message": f"Failed to extract topics: {str(e)}"}
 
+@app.post("/api/deduplicate-topics")
+async def deduplicate_topics_endpoint():
+    """
+    Manually trigger topic deduplication and merging
+    """
+    try:
+        # Load existing topic graph
+        with open(graph_path, "r", encoding="utf-8") as f:
+            graph_data = json.load(f)
+
+        # Extract topics and people
+        topics = [node for node in graph_data.get("nodes", []) if node.get("type") == "topic"]
+        people = [node for node in graph_data.get("nodes", []) if node.get("type") == "person"]
+
+        # Merge similar topics
+        merged_topics = merge_similar_topics(topics)
+
+        # Merge similar people (by name/aliases)
+        merged_people = []
+        used_people = set()
+
+        for i, person in enumerate(people):
+            if i in used_people:
+                continue
+
+            similar_people = [person]
+            similar_indices = [i]
+            person_name = person.get("name", "").lower().strip()
+            person_aliases = [alias.lower().strip() for alias in person.get("aliases", [])]
+
+            for j, other_person in enumerate(people[i+1:], i+1):
+                if j in used_people:
+                    continue
+
+                other_name = other_person.get("name", "").lower().strip()
+                other_aliases = [alias.lower().strip() for alias in other_person.get("aliases", [])]
+
+                # Check if names or aliases match
+                if (person_name == other_name or
+                    person_name in other_aliases or
+                    other_name in person_aliases or
+                    any(alias in other_aliases for alias in person_aliases)):
+
+                    similar_people.append(other_person)
+                    similar_indices.append(j)
+
+            # Merge similar people
+            if len(similar_people) > 1:
+                # Merge people
+                all_aliases = set()
+                all_names = set()
+                max_importance = 0
+                roles = []
+
+                for p in similar_people:
+                    all_names.add(p.get("name", ""))
+                    all_aliases.update(p.get("aliases", []))
+                    max_importance = max(max_importance, p.get("importance", 3))
+                    if p.get("role"):
+                        roles.append(p.get("role"))
+
+                # Use the longest name as primary
+                primary_name = max(all_names, key=len) if all_names else person["name"]
+                all_aliases.discard(primary_name)  # Remove primary name from aliases
+
+                merged_person = {
+                    "id": person["id"],  # Keep original ID
+                    "name": primary_name,
+                    "type": "person",
+                    "category": "people",
+                    "role": "; ".join(set(roles)) if roles else person.get("role", ""),
+                    "importance": max_importance,
+                    "aliases": list(all_aliases)
+                }
+                merged_people.append(merged_person)
+                used_people.update(similar_indices)
+            else:
+                merged_people.append(person)
+                used_people.add(i)
+
+        # Rebuild the graph with merged nodes
+        all_merged_nodes = merged_topics + merged_people
+
+        # Update the graph data
+        graph_data["nodes"] = all_merged_nodes
+
+        # Save the updated graph
+        with open(graph_path, "w", encoding="utf-8") as f:
+            json.dump(graph_data, f, ensure_ascii=False, indent=2)
+
+        return {
+            "status": "success",
+            "message": f"Successfully deduplicated topics and people",
+            "original_topics": len(topics),
+            "merged_topics": len(merged_topics),
+            "original_people": len(people),
+            "merged_people": len(merged_people),
+            "topics_merged": len(topics) - len(merged_topics),
+            "people_merged": len(people) - len(merged_people)
+        }
+
+    except Exception as e:
+        print(f"Error deduplicating topics: {str(e)}")
+        return {"status": "error", "message": f"Failed to deduplicate topics: {str(e)}"}
+
+@app.post("/api/rebuild-topics")
+async def rebuild_topics_endpoint():
+    """
+    Rebuild all topics from scratch with improved extraction
+    """
+    try:
+        # Clear existing topic graph
+        graph_data = {"nodes": [], "edges": []}
+        with open(graph_path, "w", encoding="utf-8") as f:
+            json.dump(graph_data, f, ensure_ascii=False, indent=2)
+
+        # Clear existing topics file
+        topics_data = {"topics": [], "people": [], "relations": []}
+        with open(topics_path, "w", encoding="utf-8") as f:
+            json.dump(topics_data, f, ensure_ascii=False, indent=2)
+
+        # Load all entries
+        entries = load_entries()
+        if not entries:
+            return {"status": "error", "message": "No diary entries found"}
+
+        # Extract topics using the improved prompt
+        topics_result = await extract_topics_from_entries(entries)
+
+        # Update the topic graph with intelligent merging
+        update_topic_graph(topics_result)
+
+        return {
+            "status": "success",
+            "message": f"Successfully rebuilt topics from {len(entries)} entries",
+            "topics_count": len(topics_result.get("topics", [])),
+            "people_count": len(topics_result.get("people", [])),
+            "relations_count": len(topics_result.get("relations", []))
+        }
+
+    except Exception as e:
+        print(f"Error rebuilding topics: {str(e)}")
+        return {"status": "error", "message": f"Failed to rebuild topics: {str(e)}"}
+
 def load_entries():
     """
     Load diary entries from the data file
@@ -888,111 +1458,69 @@ def load_entries():
 
 async def extract_topics_from_entries(entries):
     """
-    Extract topics from diary entries using OpenAI
+    Extract topics from ALL diary entries using the improved granular system
     """
     if not entries:
         return {"topics": [], "people": [], "relations": []}
-    
+
     # Check if AI should be used for topic extraction
     if not USE_AI_FOR_TOPICS:
         print("AI topic extraction is disabled by configuration")
         return {"topics": [], "people": [], "relations": []}
-    
-    # Sort entries by date
-    sorted_entries = sorted(entries, key=lambda x: x.get("createdAt", ""))
-    
-    # Prepare the prompt for OpenAI
-    system_prompt = """
-    You are an expert at analyzing diary entries and extracting meaningful topics, people, and relationships.
-    Your task is to analyze the provided diary entries and:
-    
-    1. Identify recurring topics, themes, and concepts
-    2. Identify people mentioned in the entries
-    3. Identify relationships between topics and people
-    
-    For each topic, provide:
-    - A name (in the original language of the diary)
-    - Type (concept, activity, event, location, project, etc.)
-    - Importance (1-5 scale)
-    - Sentiment (-2 to +2 scale, where negative is negative sentiment)
-    - Context (brief description or relevant quotes)
-    
-    For each person:
-    - Name (in the original language of the diary)
-    - Role (if mentioned)
-    - Importance (1-5 scale)
-    
-    For each relationship:
-    - Source (topic or person ID)
-    - Target (topic or person ID)
-    - Type (describes, involves, related_to, etc.)
-    - Strength (1-5 scale)
-    
-    Return the results in JSON format with three arrays: topics, people, and relations.
-    """
-    
-    # Prepare the entries for the prompt
-    entries_text = "\n\n".join([
-        f"Date: {entry.get('createdAt', 'Unknown')}\n{entry.get('content', '')}" 
-        for entry in sorted_entries[:20]  # Limit to 20 entries to avoid token limits
-    ])
-    
-    user_prompt = f"""
-    Please analyze these diary entries and extract topics, people, and relationships:
-    
-    {entries_text}
-    
-    Return only a valid JSON object with the following structure:
-    {{
-      "topics": [
-        {{
-          "id": "topic_1",
-          "name": "Topic name",
-          "type": "concept|activity|event|location|project",
-          "importance": 1-5,
-          "sentiment": -2 to +2,
-          "context": "Brief description or quote"
-        }}
-      ],
-      "people": [
-        {{
-          "id": "person_1",
-          "name": "Person name",
-          "role": "Role description",
-          "importance": 1-5
-        }}
-      ],
-      "relations": [
-        {{
-          "source": "topic_1|person_1",
-          "target": "topic_2|person_2",
-          "type": "describes|involves|related_to",
-          "strength": 1-5
-        }}
-      ]
-    }}
-    """
-    
-    try:
-        # Call OpenAI API
-        response = await client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.3
-        )
-        
-        # Extract and parse the JSON response
-        content = response.choices[0].message.content
-        result = json.loads(content)
-        
-        return result
-    except Exception as e:
-        print(f"Error calling OpenAI API: {str(e)}")
-        raise Exception(f"Failed to analyze entries with OpenAI: {str(e)}")
+
+    print(f"🔄 Processing {len(entries)} entries with improved granular extraction...")
+
+    # Process entries in batches to avoid token limits and get better granularity
+    batch_size = 5  # Smaller batches for better granularity
+    all_topics = []
+    all_people = []
+    all_relations = []
+
+    for i in range(0, len(entries), batch_size):
+        batch = entries[i:i+batch_size]
+        batch_content = "\n\n".join([
+            f"Entry {j+1}: {entry.get('content', '')}"
+            for j, entry in enumerate(batch)
+        ])
+
+        print(f"📝 Processing batch {i//batch_size + 1}/{(len(entries) + batch_size - 1)//batch_size} ({len(batch)} entries)...")
+
+        try:
+            # Use our improved extract_topics function
+            batch_result = extract_topics(batch_content)
+
+            # Collect results
+            all_topics.extend(batch_result.get('topics', []))
+            all_people.extend(batch_result.get('people', []))
+            all_relations.extend(batch_result.get('relations', []))
+
+        except Exception as e:
+            print(f"⚠️  Error processing batch {i//batch_size + 1}: {e}")
+            continue
+
+    print(f"📊 Raw extraction: {len(all_topics)} topics, {len(all_people)} people, {len(all_relations)} relations")
+
+    # Apply deduplication using our improved algorithm
+    print("🔄 Deduplicating topics and people...")
+    final_topics = merge_similar_topics(all_topics)
+    final_people = merge_similar_topics(all_people)
+
+    # Remove duplicate relations
+    seen_relations = set()
+    unique_relations = []
+    for relation in all_relations:
+        relation_key = f"{relation.get('source')}-{relation.get('target')}-{relation.get('type')}"
+        if relation_key not in seen_relations:
+            seen_relations.add(relation_key)
+            unique_relations.append(relation)
+
+    print(f"✅ Final result: {len(final_topics)} topics, {len(final_people)} people, {len(unique_relations)} relations")
+
+    return {
+        "topics": final_topics,
+        "people": final_people,
+        "relations": unique_relations
+    }
 
 # GraphQL schema definition
 @strawberry.type

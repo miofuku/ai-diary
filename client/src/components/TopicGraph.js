@@ -12,6 +12,8 @@ const TopicGraph = () => {
   const [selectedNode, setSelectedNode] = useState(null);
   const [filterType, setFilterType] = useState('all');
   const [isExtracting, setIsExtracting] = useState(false);
+  const [isDeduplicating, setIsDeduplicating] = useState(false);
+  const [isRebuilding, setIsRebuilding] = useState(false);
   
   const svgRef = useRef();
   const tooltipRef = useRef();
@@ -102,6 +104,76 @@ const TopicGraph = () => {
       setError(`提取主题失败: ${err.message}`);
     } finally {
       setIsExtracting(false);
+    }
+  };
+
+  // Function to deduplicate and merge similar topics
+  const deduplicateTopics = async () => {
+    try {
+      setIsDeduplicating(true);
+      setError(null);
+
+      const response = await fetch('http://localhost:3001/api/deduplicate-topics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to deduplicate topics: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('Topic deduplication result:', result);
+
+      // Refresh the graph data after deduplication
+      const data = await request('http://localhost:3001/graphql', TOPIC_GRAPH_QUERY);
+      setGraphData({
+        nodes: data.topicGraph.nodes || [],
+        edges: data.topicGraph.edges || []
+      });
+
+    } catch (err) {
+      console.error('Error deduplicating topics:', err);
+      setError(`去重主题失败: ${err.message}`);
+    } finally {
+      setIsDeduplicating(false);
+    }
+  };
+
+  // Function to rebuild all topics from scratch
+  const rebuildTopics = async () => {
+    try {
+      setIsRebuilding(true);
+      setError(null);
+
+      const response = await fetch('http://localhost:3001/api/rebuild-topics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to rebuild topics: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('Topic rebuild result:', result);
+
+      // Refresh the graph data after rebuild
+      const data = await request('http://localhost:3001/graphql', TOPIC_GRAPH_QUERY);
+      setGraphData({
+        nodes: data.topicGraph.nodes || [],
+        edges: data.topicGraph.edges || []
+      });
+
+    } catch (err) {
+      console.error('Error rebuilding topics:', err);
+      setError(`重建主题失败: ${err.message}`);
+    } finally {
+      setIsRebuilding(false);
     }
   };
 
@@ -335,13 +407,31 @@ const TopicGraph = () => {
           </select>
         </div>
         
-        <button 
-          className="extract-topics-button" 
-          onClick={extractTopics}
-          disabled={isExtracting}
-        >
-          {isExtracting ? '提取中...' : '从日记提取主题'}
-        </button>
+        <div className="action-buttons">
+          <button
+            className="extract-topics-button"
+            onClick={extractTopics}
+            disabled={isExtracting || isDeduplicating || isRebuilding}
+          >
+            {isExtracting ? '提取中...' : '从日记提取主题'}
+          </button>
+
+          <button
+            className="deduplicate-topics-button"
+            onClick={deduplicateTopics}
+            disabled={isExtracting || isDeduplicating || isRebuilding}
+          >
+            {isDeduplicating ? '去重中...' : '智能去重主题'}
+          </button>
+
+          <button
+            className="rebuild-topics-button"
+            onClick={rebuildTopics}
+            disabled={isExtracting || isDeduplicating || isRebuilding}
+          >
+            {isRebuilding ? '重建中...' : '重建所有主题'}
+          </button>
+        </div>
       </div>
       
       {error && (

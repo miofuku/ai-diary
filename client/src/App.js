@@ -31,17 +31,7 @@ function App() {
   // Add state for topic diaries view
   const [showTopicDiaries, setShowTopicDiaries] = useState(false);
   
-  // Static themes data
-  const staticThemes = [
-    { id: 1, name: '健康' },
-    { id: 2, name: '园艺' },
-    { id: 3, name: '宠物' },
-    { id: 4, name: '工作' },
-    { id: 5, name: '旅行' },
-    { id: 6, name: '阅读' },
-    { id: 7, name: '电影' },
-    { id: 8, name: '食物' }
-  ];
+  // No static themes - all topics should come from actual diary entries
 
   const fetchEntries = async () => {
     try {
@@ -324,82 +314,6 @@ function App() {
     return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
   };
 
-  // 模拟主题相关的日记数据
-  const themeEntryData = {
-    1: [ // 健康日记
-      { 
-        id: 101, 
-        date: '2023-05-15',
-        title: '开始晨跑',
-        excerpt: '...今天开始了我的<span class="highlight">健康</span>计划，清晨6点起床去<span class="highlight">跑步</span>，感觉精神焕发...'
-      },
-      { 
-        id: 102, 
-        date: '2023-05-20',
-        title: '饮食调整',
-        excerpt: '...决定调整<span class="highlight">饮食结构</span>，减少碳水摄入，增加蛋白质和蔬菜的比例，为了更好的<span class="highlight">健康</span>...'
-      }
-    ],
-    2: [ // 园艺工作
-      { 
-        id: 201, 
-        date: '2023-06-01',
-        title: '种植番茄',
-        excerpt: '...今天在<span class="highlight">花园</span>里种下了几颗番茄苗，希望今年能有好收成...'
-      },
-      { 
-        id: 202, 
-        date: '2023-06-05',
-        title: '花园除草',
-        excerpt: '...花了两个小时给<span class="highlight">花园</span>除草，虽然累但看到整齐的<span class="highlight">园艺</span>成果很满足...'
-      }
-    ],
-    3: [ // 宠物
-      { 
-        id: 301, 
-        date: '2023-07-10',
-        title: '猫咪体检',
-        excerpt: '...带<span class="highlight">小咪</span>去了宠物医院做年度体检，一切正常，医生说它很健康...'
-      },
-      { 
-        id: 302, 
-        date: '2023-07-15',
-        title: '新猫玩具',
-        excerpt: '...给<span class="highlight">小咪</span>买了新的猫爬架，它似乎很喜欢，一整天都在上面玩耍...'
-      }
-    ],
-    4: [ // 工作项目
-      { 
-        id: 401, 
-        date: '2023-08-01',
-        title: '项目启动',
-        excerpt: '...今天<span class="highlight">项目</span>正式启动，团队成员都很积极，讨论了初步计划和时间表...'
-      },
-      { 
-        id: 402, 
-        date: '2023-08-10',
-        title: '进度汇报',
-        excerpt: '...<span class="highlight">项目</span>进展顺利，完成了第一阶段的开发任务，准备下周向客户演示...'
-      }
-    ],
-    5: [ // 阅读笔记
-      { 
-        id: 501, 
-        date: '2023-09-05',
-        title: '《原子习惯》',
-        excerpt: '...今天读完了《原子习惯》这本书，很多<span class="highlight">阅读</span>心得：关于如何建立持久的好习惯...'
-      }
-    ],
-    6: [ // 旅行
-      { 
-        id: 601, 
-        date: '2023-10-01',
-        title: '杭州之行',
-        excerpt: '...这次<span class="highlight">旅行</span>到杭州，西湖的景色果然名不虚传，特别是雨后的断桥...'
-      }
-    ]
-  };
-
   // Update fetchTopicThreads to use GraphQL topic_graph endpoint
   const fetchTopicThreads = async () => {
     setIsLoadingTopics(true);
@@ -504,17 +418,7 @@ function App() {
     }
   };
 
-  // Update refresh topics button to show loading state
-  const handleRefreshTopics = async () => {
-    setIsLoadingTopics(true);
-    try {
-      await fetchTopicThreads();
-    } catch (error) {
-      console.error('Error refreshing topics:', error);
-    } finally {
-      setIsLoadingTopics(false);
-    }
-  };
+
 
   // 在组件加载时获取主题
   useEffect(() => {
@@ -531,14 +435,8 @@ function App() {
       setSelectedTheme(themeId);
       setThemeCurrentPage(1); // Reset to first page when changing themes
       
-      // Check if the theme is a dynamic topic or static theme
-      if (typeof themeId === 'string') {
-        // Direct API call using the theme ID
-        fetchTopicEntries(themeId);
-      } else {
-        // Static theme with predefined data
-        setThemeRelatedEntries(themeEntryData[themeId] || []);
-      }
+      // All themes now come from API - fetch entries for this topic
+      fetchTopicEntries(themeId);
     }
   };
 
@@ -895,8 +793,8 @@ function App() {
                   ) : (
                     <>
                       <div className="theme-tags">
-                        {/* 优先显示动态主题，如果没有则显示静态主题 */}
-                        {(dynamicTopics.length > 0 ? dynamicTopics : staticThemes).map(theme => (
+                        {/* 显示从实际日记条目中提取的主题 */}
+                        {dynamicTopics.map(theme => (
                           <div 
                             key={theme.id} 
                             className={`theme-tag ${selectedTheme === theme.id ? 'active' : ''}`}
@@ -918,7 +816,7 @@ function App() {
                   {selectedTheme && themeRelatedEntries.length > 0 && (
                     <div className="theme-related-entries">
                       <div className="theme-entries-header">
-                        <h3>与"{(dynamicTopics.length > 0 ? dynamicTopics : staticThemes).find(t => t.id === selectedTheme)?.name}"相关的日记片段</h3>
+                        <h3>与"{dynamicTopics.find(t => t.id === selectedTheme)?.name}"相关的日记片段</h3>
                         <div className="sort-toggle">
                           <span className={!themeSortNewestFirst ? 'active' : ''}>最早</span>
                           <label className="switch">
@@ -979,8 +877,8 @@ function App() {
             {activeTab === 'diary' && !editingEntryId && (
               <>
                 {showTopicDiaries ? (
-                  <TopicDiaries 
-                    topics={dynamicTopics.length > 0 ? dynamicTopics : staticThemes}
+                  <TopicDiaries
+                    topics={dynamicTopics}
                     selectedTopicId={selectedTheme}
                     onTopicSelect={(topicId) => setSelectedTheme(topicId)}
                     onBack={() => setShowTopicDiaries(false)}
