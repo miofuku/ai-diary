@@ -2093,6 +2093,82 @@ async def deduplicate_topics_endpoint():
         print(f"Error deduplicating topics: {str(e)}")
         return {"status": "error", "message": f"Failed to deduplicate topics: {str(e)}"}
 
+@app.post("/api/apply-consolidated-topics")
+async def apply_consolidated_topics(consolidated_data: dict):
+    """
+    Apply LLM-consolidated topics to replace existing topics
+    """
+    try:
+        # Validate input data
+        if 'topics' not in consolidated_data or 'people' not in consolidated_data:
+            raise HTTPException(status_code=400, detail="Invalid consolidated data format")
+
+        new_topics = consolidated_data['topics']
+        new_people = consolidated_data['people']
+
+        # Load current graph data to preserve edges
+        with open(graph_path, "r", encoding="utf-8") as f:
+            current_graph = json.load(f)
+
+        # Create new nodes list with consolidated topics and people
+        new_nodes = []
+
+        # Add consolidated topics as nodes
+        for topic in new_topics:
+            new_nodes.append({
+                "id": topic['id'],
+                "name": topic['name'],
+                "type": "topic",
+                "category": topic.get('category', 'concepts'),
+                "importance": topic.get('importance', 3),
+                "sentiment": topic.get('sentiment', 0.0),
+                "context": topic.get('context', ''),
+                "keywords": topic.get('keywords', [])
+            })
+
+        # Add people as nodes
+        for person in new_people:
+            new_nodes.append({
+                "id": person['id'],
+                "name": person['name'],
+                "type": "person",
+                "category": "people",
+                "importance": person.get('importance', 3),
+                "role": person.get('role', ''),
+                "context": person.get('context', '')
+            })
+
+        # Update graph with new nodes, keep existing edges for now
+        updated_graph = {
+            "nodes": new_nodes,
+            "edges": current_graph.get("edges", [])
+        }
+
+        # Save updated graph
+        with open(graph_path, "w", encoding="utf-8") as f:
+            json.dump(updated_graph, f, ensure_ascii=False, indent=2)
+
+        # Also update the topics.json file
+        topics_data = {
+            "topics": new_topics,
+            "people": new_people,
+            "relations": []  # Relations will be rebuilt from edges
+        }
+
+        with open(topics_path, "w", encoding="utf-8") as f:
+            json.dump(topics_data, f, ensure_ascii=False, indent=2)
+
+        return {
+            "status": "success",
+            "message": f"Applied consolidated topics: {len(new_topics)} topics, {len(new_people)} people",
+            "topics_count": len(new_topics),
+            "people_count": len(new_people)
+        }
+
+    except Exception as e:
+        print(f"Error applying consolidated topics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/rebuild-topics")
 async def rebuild_topics_endpoint():
     """
