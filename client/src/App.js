@@ -799,17 +799,48 @@ function App() {
                     <div className="loading-topics">正在加载主题...</div>
                   ) : (
                     <>
-                      <div className="theme-tags">
-                        {/* 显示从实际日记条目中提取的主题 */}
-                        {dynamicTopics.map(theme => (
-                          <div 
-                            key={theme.id} 
-                            className={`theme-tag ${selectedTheme === theme.id ? 'active' : ''}`}
-                            onClick={() => handleThemeClick(theme.id)}
-                          >
-                            {theme.name}
+                      <div className="theme-display">
+                        <div className="theme-header">
+                          <span className="theme-count">{dynamicTopics.length} 个主题</span>
+                          <div className="theme-quick-actions">
+                            <button
+                              className="quick-action-button"
+                              onClick={() => setShowTopicManager(true)}
+                              title="管理主题"
+                            >
+                              ⚙️
+                            </button>
+                            <button
+                              className="quick-action-button"
+                              onClick={fetchTopicThreads}
+                              title="刷新主题"
+                            >
+                              🔄
+                            </button>
                           </div>
-                        ))}
+                        </div>
+                        <div className="theme-tags">
+                          {/* 显示从实际日记条目中提取的主题 */}
+                          {dynamicTopics.map(theme => (
+                            <div
+                              key={theme.id}
+                              className={`theme-tag ${selectedTheme === theme.id ? 'active' : ''}`}
+                              onClick={() => handleThemeClick(theme.id)}
+                              title={`${theme.category} - 重要性: ${theme.importance || 3}`}
+                            >
+                              <span className="theme-icon">
+                                {theme.category === 'people' ? '👤' :
+                                 theme.category === 'projects' ? '📁' :
+                                 theme.category === 'activities' ? '🎯' :
+                                 theme.category === 'places' ? '📍' : '📝'}
+                              </span>
+                              <span className="theme-name">{theme.name}</span>
+                              {theme.user_priority && theme.user_priority > 3 && (
+                                <span className="theme-priority">⭐</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                       <div className="theme-actions">
                         <button

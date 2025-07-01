@@ -8,7 +8,7 @@ import tempfile
 import os
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from openai import OpenAI
 # Temporarily disabled speech-to-text functionality
@@ -20,6 +20,11 @@ from strawberry.fastapi import GraphQLRouter
 import networkx as nx
 from typing import List, Optional
 import re
+import threading
+import schedule
+import uuid
+from difflib import SequenceMatcher
+import asyncio
 
 # Load environment variables
 load_dotenv()
@@ -412,6 +417,285 @@ def has_related_content(topic_id, topic_name):
     except Exception as e:
         print(f"Error checking related content for topic {topic_id}: {e}")
         return True  # Default to showing the topic if we can't check
+
+# Intelligent Topic Detection Pipeline
+class TopicDetectionPipeline:
+    def __init__(self):
+        self.detection_queue = []
+        self.last_run = None
+        self.is_running = False
+        self.batch_size = 10
+        self.min_queue_size = 3
+        self.detection_lock = threading.Lock()
+
+    def add_to_queue(self, entry_id, content, priority='normal'):
+        """Add entry to detection queue"""
+        with self.detection_lock:
+            queue_item = {
+                'entry_id': entry_id,
+                'content': content,
+                'priority': priority,
+                'added_at': datetime.now().isoformat(),
+                'processed': False
+            }
+            self.detection_queue.append(queue_item)
+            print(f"Added entry {entry_id} to topic detection queue (queue size: {len(self.detection_queue)})")
+
+    def should_run_detection(self):
+        """Determine if detection should run based on queue size and timing"""
+        config = load_topic_config()
+        auto_settings = config.get('auto_detection_settings', {})
+
+        if not auto_settings.get('enabled', True):
+            return False
+
+        # Check queue size
+        unprocessed_count = len([item for item in self.detection_queue if not item.get('processed', False)])
+        if unprocessed_count < self.min_queue_size:
+            return False
+
+        # Check timing based on frequency setting
+        frequency = auto_settings.get('frequency', 'weekly')
+        if self.last_run:
+            last_run_time = datetime.fromisoformat(self.last_run)
+            now = datetime.now()
+
+            if frequency == 'daily' and (now - last_run_time).days < 1:
+                return False
+            elif frequency == 'weekly' and (now - last_run_time).days < 7:
+                return False
+            elif frequency == 'monthly' and (now - last_run_time).days < 30:
+                return False
+
+        return True
+
+    async def run_batch_detection(self):
+        """Run batch topic detection on queued entries"""
+        if self.is_running:
+            print("Topic detection already running, skipping...")
+            return
+
+        with self.detection_lock:
+            if not self.should_run_detection():
+                return
+
+            self.is_running = True
+            unprocessed_items = [item for item in self.detection_queue if not item.get('processed', False)]
+
+            if not unprocessed_items:
+                self.is_running = False
+                return
+
+        try:
+            print(f"🔍 Starting batch topic detection for {len(unprocessed_items)} entries...")
+
+            # Process in batches
+            for i in range(0, len(unprocessed_items), self.batch_size):
+                batch = unprocessed_items[i:i + self.batch_size]
+                await self._process_batch(batch)
+
+            # Update last run time
+            self.last_run = datetime.now().isoformat()
+
+            # Save detection run info to suggestions file
+            suggestions = load_topic_suggestions()
+            suggestions['last_detection_run'] = self.last_run
+            save_topic_suggestions(suggestions)
+
+            print(f"✅ Batch topic detection completed")
+
+        except Exception as e:
+            print(f"❌ Error in batch topic detection: {e}")
+        finally:
+            self.is_running = False
+
+    async def _process_batch(self, batch):
+        """Process a batch of entries for topic detection"""
+        try:
+            # Combine batch content
+            combined_content = "\n\n".join([
+                f"Entry {item['entry_id']}: {item['content']}"
+                for item in batch
+            ])
+
+            # Extract topics using existing function
+            topics_result = extract_topics(combined_content)
+
+            # Generate topic suggestions instead of immediately updating graph
+            await self._generate_topic_suggestions(topics_result, batch)
+
+            # Mark items as processed
+            with self.detection_lock:
+                for item in batch:
+                    item['processed'] = True
+
+            print(f"📊 Processed batch of {len(batch)} entries")
+
+        except Exception as e:
+            print(f"❌ Error processing batch: {e}")
+
+    async def _generate_topic_suggestions(self, topics_result, batch):
+        """Generate topic suggestions for user review"""
+        suggestions = load_topic_suggestions()
+        config = load_topic_config()
+        min_mentions = config.get('auto_detection_settings', {}).get('min_mentions', 3)
+
+        # Process detected topics
+        for topic in topics_result.get('topics', []):
+            topic_name = topic.get('name', '')
+            if not topic_name:
+                continue
+
+            # Check if topic already exists or is suggested
+            existing_topics = get_all_available_topics()
+            if any(t['name'].lower() == topic_name.lower() for t in existing_topics):
+                continue
+
+            # Check if already in suggestions
+            pending = suggestions.get('pending_review', [])
+            if any(s['name'].lower() == topic_name.lower() for s in pending):
+                continue
+
+            # Count mentions across all entries to determine if it meets threshold
+            mention_count = self._count_topic_mentions(topic_name)
+            if mention_count >= min_mentions:
+                suggestion = {
+                    'id': f"suggested_{uuid.uuid4().hex[:8]}",
+                    'name': topic_name,
+                    'type': topic.get('type', 'topic'),
+                    'category': topic.get('category', 'activities'),
+                    'confidence': self._calculate_confidence(topic, mention_count),
+                    'mention_count': mention_count,
+                    'first_detected': datetime.now().isoformat(),
+                    'sample_entries': [item['entry_id'] for item in batch[:3]],
+                    'keywords': topic.get('keywords', []),
+                    'importance': topic.get('importance', 3)
+                }
+
+                suggestions.setdefault('pending_review', []).append(suggestion)
+                print(f"💡 Generated suggestion for topic: {topic_name} (mentions: {mention_count})")
+
+        # Process detected people
+        for person in topics_result.get('people', []):
+            person_name = person.get('name', '')
+            if not person_name:
+                continue
+
+            # Similar logic for people
+            existing_people = [t for t in get_all_available_topics() if t.get('type') == 'person']
+            if any(p['name'].lower() == person_name.lower() for p in existing_people):
+                continue
+
+            pending = suggestions.get('pending_review', [])
+            if any(s['name'].lower() == person_name.lower() for s in pending):
+                continue
+
+            mention_count = self._count_topic_mentions(person_name)
+            if mention_count >= min_mentions:
+                suggestion = {
+                    'id': f"suggested_{uuid.uuid4().hex[:8]}",
+                    'name': person_name,
+                    'type': 'person',
+                    'category': 'people',
+                    'confidence': self._calculate_confidence(person, mention_count),
+                    'mention_count': mention_count,
+                    'first_detected': datetime.now().isoformat(),
+                    'sample_entries': [item['entry_id'] for item in batch[:3]],
+                    'role': person.get('role', '提及的人物'),
+                    'importance': person.get('importance', 3)
+                }
+
+                suggestions.setdefault('pending_review', []).append(suggestion)
+                print(f"👤 Generated suggestion for person: {person_name} (mentions: {mention_count})")
+
+        save_topic_suggestions(suggestions)
+
+    def _count_topic_mentions(self, topic_name):
+        """Count how many times a topic is mentioned across all entries"""
+        try:
+            with open(data_path, 'r', encoding='utf-8') as f:
+                entries = json.load(f)
+
+            count = 0
+            topic_lower = topic_name.lower()
+            for entry in entries:
+                content = entry.get('content', '').lower()
+                if topic_lower in content:
+                    count += 1
+
+            return count
+        except Exception as e:
+            print(f"Error counting topic mentions: {e}")
+            return 0
+
+    def _calculate_confidence(self, topic_data, mention_count):
+        """Calculate confidence score for a topic suggestion"""
+        base_confidence = 0.5
+
+        # Boost confidence based on mention frequency
+        mention_boost = min(mention_count * 0.1, 0.3)
+
+        # Boost confidence based on topic importance
+        importance_boost = (topic_data.get('importance', 3) - 3) * 0.05
+
+        # Boost confidence if topic has keywords
+        keyword_boost = 0.1 if topic_data.get('keywords') else 0
+
+        confidence = base_confidence + mention_boost + importance_boost + keyword_boost
+        return min(confidence, 1.0)
+
+# Global pipeline instance
+topic_pipeline = TopicDetectionPipeline()
+
+# Scheduled Task Runner
+class ScheduledTaskRunner:
+    def __init__(self):
+        self.scheduler_thread = None
+        self.running = False
+
+    def start_scheduler(self):
+        """Start the background scheduler"""
+        if self.running:
+            return
+
+        self.running = True
+
+        # Schedule topic detection based on user preferences
+        schedule.every().hour.do(self._check_and_run_detection)
+
+        # Start scheduler in background thread
+        self.scheduler_thread = threading.Thread(target=self._run_scheduler, daemon=True)
+        self.scheduler_thread.start()
+        print("📅 Topic detection scheduler started")
+
+    def stop_scheduler(self):
+        """Stop the background scheduler"""
+        self.running = False
+        schedule.clear()
+        print("📅 Topic detection scheduler stopped")
+
+    def _run_scheduler(self):
+        """Run the scheduler loop"""
+        while self.running:
+            try:
+                schedule.run_pending()
+                time.sleep(60)  # Check every minute
+            except Exception as e:
+                print(f"Error in scheduler: {e}")
+                time.sleep(60)
+
+    def _check_and_run_detection(self):
+        """Check if detection should run and trigger it"""
+        try:
+            if topic_pipeline.should_run_detection():
+                print("🔄 Scheduled topic detection triggered")
+                # Run in separate thread to avoid blocking scheduler
+                threading.Thread(target=lambda: asyncio.run(topic_pipeline.run_batch_detection())).start()
+        except Exception as e:
+            print(f"Error in scheduled detection check: {e}")
+
+# Global scheduler instance
+task_scheduler = ScheduledTaskRunner()
 
 def get_user_visible_topics():
     """Get topics that should be visible to the user based on their configuration"""
@@ -1351,11 +1635,15 @@ async def create_entry(entry: EntryCreate):
                 # If there's an error reading the graph file, we should extract
                 should_extract = USE_AI_FOR_TOPICS
             
-        # Extract topics from the entry and update the topic graph if needed
+        # Add entry to topic detection pipeline instead of immediate extraction
         if should_extract:
-            print("Extracting topics from new entry...")
-            topics_data = extract_topics(optimized_content)
-            update_topic_graph(topics_data)
+            print("Adding entry to topic detection pipeline...")
+            topic_pipeline.add_to_queue(new_entry['id'], optimized_content, priority='normal')
+
+            # Trigger batch detection if conditions are met
+            if topic_pipeline.should_run_detection():
+                # Run detection in background thread to avoid blocking response
+                threading.Thread(target=lambda: asyncio.run(topic_pipeline.run_batch_detection())).start()
         else:
             print("Skipping topic extraction (AI usage disabled)")
         
@@ -1462,11 +1750,15 @@ async def update_entry(id: int, entry_update: EntryUpdate):
             # If there's an error reading the graph file, we should extract
             should_extract = USE_AI_FOR_TOPICS
         
-    # Extract topics from the updated entry and update the topic graph if needed
+    # Add updated entry to topic detection pipeline
     if should_extract:
-        print("Extracting topics from updated entry...")
-        topics_data = extract_topics(final_content)
-        update_topic_graph(topics_data)
+        print("Adding updated entry to topic detection pipeline...")
+        topic_pipeline.add_to_queue(id, final_content, priority='high')
+
+        # Trigger batch detection if conditions are met
+        if topic_pipeline.should_run_detection():
+            # Run detection in background thread to avoid blocking response
+            threading.Thread(target=lambda: asyncio.run(topic_pipeline.run_batch_detection())).start()
     else:
         print("Skipping topic extraction (AI usage disabled)")
     
@@ -2448,6 +2740,508 @@ async def reset_topic_config():
         print(f"Error resetting topic config: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Topic Detection Pipeline Endpoints
+
+@app.get("/api/topic-pipeline/status")
+async def get_pipeline_status():
+    """Get current status of the topic detection pipeline"""
+    try:
+        with topic_pipeline.detection_lock:
+            queue_size = len(topic_pipeline.detection_queue)
+            unprocessed_count = len([item for item in topic_pipeline.detection_queue if not item.get('processed', False)])
+
+        status = {
+            "is_running": topic_pipeline.is_running,
+            "queue_size": queue_size,
+            "unprocessed_count": unprocessed_count,
+            "last_run": topic_pipeline.last_run,
+            "batch_size": topic_pipeline.batch_size,
+            "min_queue_size": topic_pipeline.min_queue_size
+        }
+
+        return {"status": "success", "pipeline_status": status}
+    except Exception as e:
+        print(f"Error getting pipeline status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/topic-pipeline/run")
+async def trigger_pipeline_run():
+    """Manually trigger topic detection pipeline"""
+    try:
+        if topic_pipeline.is_running:
+            return {"status": "info", "message": "Pipeline is already running"}
+
+        with topic_pipeline.detection_lock:
+            unprocessed_count = len([item for item in topic_pipeline.detection_queue if not item.get('processed', False)])
+
+        if unprocessed_count == 0:
+            return {"status": "info", "message": "No entries in queue to process"}
+
+        # Run detection in background thread
+        threading.Thread(target=lambda: asyncio.run(topic_pipeline.run_batch_detection())).start()
+
+        return {"status": "success", "message": f"Pipeline started for {unprocessed_count} entries"}
+    except Exception as e:
+        print(f"Error triggering pipeline run: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/topic-pipeline/clear-queue")
+async def clear_pipeline_queue():
+    """Clear the topic detection queue"""
+    try:
+        with topic_pipeline.detection_lock:
+            old_size = len(topic_pipeline.detection_queue)
+            topic_pipeline.detection_queue = []
+
+        return {"status": "success", "message": f"Cleared {old_size} items from queue"}
+    except Exception as e:
+        print(f"Error clearing pipeline queue: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/topic-pipeline/queue")
+async def get_pipeline_queue():
+    """Get current items in the topic detection queue"""
+    try:
+        with topic_pipeline.detection_lock:
+            queue_items = [
+                {
+                    "entry_id": item["entry_id"],
+                    "priority": item["priority"],
+                    "added_at": item["added_at"],
+                    "processed": item.get("processed", False),
+                    "content_preview": item["content"][:100] + "..." if len(item["content"]) > 100 else item["content"]
+                }
+                for item in topic_pipeline.detection_queue
+            ]
+
+        return {"status": "success", "queue": queue_items}
+    except Exception as e:
+        print(f"Error getting pipeline queue: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/topic-pipeline/process-all-entries")
+async def process_all_entries():
+    """Add all existing entries to the topic detection pipeline"""
+    try:
+        # Load all entries
+        with open(data_path, 'r', encoding='utf-8') as f:
+            entries = json.load(f)
+
+        if not entries:
+            return {"status": "info", "message": "No entries found to process"}
+
+        # Add all entries to queue
+        added_count = 0
+        for entry in entries:
+            content = entry.get('content', '')
+            if content.strip():
+                topic_pipeline.add_to_queue(entry['id'], content, priority='bulk')
+                added_count += 1
+
+        return {"status": "success", "message": f"Added {added_count} entries to detection queue"}
+    except Exception as e:
+        print(f"Error processing all entries: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/topic-stats")
+async def get_topic_stats():
+    """Get usage statistics for all topics"""
+    try:
+        # Load all entries
+        with open(data_path, 'r', encoding='utf-8') as f:
+            entries = json.load(f)
+
+        # Load all topics
+        all_topics = get_all_available_topics()
+
+        stats = {}
+
+        for topic in all_topics:
+            topic_name = topic['name'].lower()
+            mention_count = 0
+            last_mentioned = None
+            entry_ids = []
+
+            # Count mentions across all entries
+            for entry in entries:
+                content = entry.get('content', '').lower()
+                if topic_name in content:
+                    mention_count += 1
+                    entry_ids.append(entry['id'])
+                    entry_date = entry.get('createdAt', '')
+                    if not last_mentioned or entry_date > last_mentioned:
+                        last_mentioned = entry_date
+
+            stats[topic['id']] = {
+                'mention_count': mention_count,
+                'last_mentioned': last_mentioned,
+                'entry_ids': entry_ids[:5],  # Keep only first 5 for performance
+                'category': topic.get('category', 'unknown'),
+                'type': topic.get('type', 'topic')
+            }
+
+        return {"status": "success", "stats": stats}
+    except Exception as e:
+        print(f"Error getting topic stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/topic-analytics")
+async def get_topic_analytics():
+    """Get comprehensive topic analytics and insights"""
+    try:
+        # Load all entries and topics
+        with open(data_path, 'r', encoding='utf-8') as f:
+            entries = json.load(f)
+
+        all_topics = get_all_available_topics()
+        config = load_topic_config()
+
+        # Calculate analytics
+        analytics = {
+            "overview": calculate_topic_overview(entries, all_topics),
+            "trends": calculate_topic_trends(entries, all_topics),
+            "insights": generate_topic_insights(entries, all_topics, config),
+            "recommendations": generate_topic_recommendations(entries, all_topics, config),
+            "activity_patterns": analyze_activity_patterns(entries, all_topics),
+            "topic_relationships": analyze_topic_relationships(entries, all_topics)
+        }
+
+        return {"status": "success", "analytics": analytics}
+    except Exception as e:
+        print(f"Error getting topic analytics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+def calculate_topic_overview(entries, topics):
+    """Calculate overview statistics for topics"""
+    total_topics = len(topics)
+    active_topics = 0
+    total_mentions = 0
+
+    # Calculate mentions for each topic
+    for topic in topics:
+        topic_name = topic['name'].lower()
+        mentions = sum(1 for entry in entries if topic_name in entry.get('content', '').lower())
+        if mentions > 0:
+            active_topics += 1
+            total_mentions += mentions
+
+    # Calculate time range
+    if entries:
+        dates = [entry.get('createdAt', '') for entry in entries if entry.get('createdAt')]
+        dates.sort()
+        time_range = {
+            "start": dates[0] if dates else None,
+            "end": dates[-1] if dates else None,
+            "total_days": len(set(date[:10] for date in dates)) if dates else 0
+        }
+    else:
+        time_range = {"start": None, "end": None, "total_days": 0}
+
+    return {
+        "total_topics": total_topics,
+        "active_topics": active_topics,
+        "inactive_topics": total_topics - active_topics,
+        "total_mentions": total_mentions,
+        "avg_mentions_per_topic": total_mentions / max(active_topics, 1),
+        "time_range": time_range,
+        "total_entries": len(entries)
+    }
+
+def calculate_topic_trends(entries, topics):
+    """Calculate topic trends over time"""
+    from datetime import datetime, timedelta
+    import calendar
+
+    # Group entries by month
+    monthly_data = {}
+    for entry in entries:
+        created_at = entry.get('createdAt', '')
+        if created_at:
+            try:
+                date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                month_key = f"{date.year}-{date.month:02d}"
+                if month_key not in monthly_data:
+                    monthly_data[month_key] = []
+                monthly_data[month_key].append(entry)
+            except:
+                continue
+
+    # Calculate trends for top topics
+    topic_trends = []
+    for topic in topics[:20]:  # Top 20 topics
+        topic_name = topic['name'].lower()
+        monthly_mentions = {}
+
+        for month, month_entries in monthly_data.items():
+            mentions = sum(1 for entry in month_entries if topic_name in entry.get('content', '').lower())
+            monthly_mentions[month] = mentions
+
+        if sum(monthly_mentions.values()) > 0:
+            topic_trends.append({
+                "topic_id": topic['id'],
+                "topic_name": topic['name'],
+                "category": topic.get('category', 'unknown'),
+                "monthly_data": monthly_mentions,
+                "total_mentions": sum(monthly_mentions.values()),
+                "trend_direction": calculate_trend_direction(monthly_mentions)
+            })
+
+    # Sort by total mentions
+    topic_trends.sort(key=lambda x: x['total_mentions'], reverse=True)
+
+    return {
+        "monthly_overview": {month: len(entries) for month, entries in monthly_data.items()},
+        "topic_trends": topic_trends[:10],  # Top 10 trending topics
+        "time_periods": list(monthly_data.keys())
+    }
+
+def calculate_trend_direction(monthly_data):
+    """Calculate if a topic is trending up, down, or stable"""
+    if not monthly_data:
+        return "stable"
+
+    months = sorted(monthly_data.keys())
+    if len(months) < 2:
+        return "stable"
+
+    recent_months = months[-3:]  # Last 3 months
+    earlier_months = months[:-3] if len(months) > 3 else months[:1]
+
+    recent_avg = sum(monthly_data[month] for month in recent_months) / len(recent_months)
+    earlier_avg = sum(monthly_data[month] for month in earlier_months) / len(earlier_months)
+
+    if recent_avg > earlier_avg * 1.2:
+        return "up"
+    elif recent_avg < earlier_avg * 0.8:
+        return "down"
+    else:
+        return "stable"
+
+def generate_topic_insights(entries, topics, config):
+    """Generate intelligent insights about topic usage"""
+    insights = []
+
+    # Most active topics
+    topic_activity = []
+    for topic in topics:
+        topic_name = topic['name'].lower()
+        mentions = sum(1 for entry in entries if topic_name in entry.get('content', '').lower())
+        if mentions > 0:
+            topic_activity.append((topic, mentions))
+
+    topic_activity.sort(key=lambda x: x[1], reverse=True)
+
+    if topic_activity:
+        top_topic = topic_activity[0]
+        insights.append({
+            "type": "most_active",
+            "title": "最活跃主题",
+            "description": f"'{top_topic[0]['name']}' 是您最常提及的主题，共出现 {top_topic[1]} 次",
+            "topic_id": top_topic[0]['id'],
+            "value": top_topic[1]
+        })
+
+    # Category distribution
+    category_counts = {}
+    for topic, mentions in topic_activity:
+        category = topic.get('category', 'unknown')
+        category_counts[category] = category_counts.get(category, 0) + mentions
+
+    if category_counts:
+        top_category = max(category_counts.items(), key=lambda x: x[1])
+        insights.append({
+            "type": "category_focus",
+            "title": "主要关注领域",
+            "description": f"您最关注 '{top_category[0]}' 相关的主题，共提及 {top_category[1]} 次",
+            "category": top_category[0],
+            "value": top_category[1]
+        })
+
+    # Hidden topics with high activity
+    hidden_topics = set(config.get('hidden_topics', []))
+    active_hidden = [(topic, mentions) for topic, mentions in topic_activity
+                     if topic['id'] in hidden_topics and mentions > 5]
+
+    if active_hidden:
+        insights.append({
+            "type": "hidden_active",
+            "title": "隐藏的活跃主题",
+            "description": f"您隐藏了 {len(active_hidden)} 个活跃主题，可能需要重新考虑显示",
+            "topics": [{"name": topic['name'], "mentions": mentions} for topic, mentions in active_hidden[:3]]
+        })
+
+    # Inactive visible topics
+    visible_topics = set(config.get('visible_topics', []))
+    if not visible_topics:  # If no explicit visible topics, all non-hidden are visible
+        visible_topics = set(topic['id'] for topic in topics if topic['id'] not in hidden_topics)
+
+    inactive_visible = [topic for topic in topics
+                       if topic['id'] in visible_topics and
+                       not any(topic['name'].lower() in entry.get('content', '').lower() for entry in entries)]
+
+    if inactive_visible:
+        insights.append({
+            "type": "inactive_visible",
+            "title": "未使用的显示主题",
+            "description": f"有 {len(inactive_visible)} 个显示的主题从未被提及，建议隐藏",
+            "count": len(inactive_visible)
+        })
+
+    return insights
+
+def generate_topic_recommendations(entries, topics, config):
+    """Generate recommendations for topic management"""
+    recommendations = []
+
+    # Recommend hiding inactive topics
+    inactive_topics = []
+    for topic in topics:
+        topic_name = topic['name'].lower()
+        mentions = sum(1 for entry in entries if topic_name in entry.get('content', '').lower())
+        if mentions == 0:
+            inactive_topics.append(topic)
+
+    if len(inactive_topics) > 5:
+        recommendations.append({
+            "type": "hide_inactive",
+            "priority": "medium",
+            "title": "隐藏未使用的主题",
+            "description": f"建议隐藏 {len(inactive_topics)} 个从未使用的主题以简化界面",
+            "action": "bulk_hide",
+            "topic_ids": [topic['id'] for topic in inactive_topics]
+        })
+
+    # Recommend creating custom topics for frequent phrases
+    frequent_phrases = find_frequent_phrases(entries)
+    existing_topic_names = set(topic['name'].lower() for topic in topics)
+
+    new_topic_suggestions = []
+    for phrase, count in frequent_phrases:
+        if phrase not in existing_topic_names and count >= 5:
+            new_topic_suggestions.append({"phrase": phrase, "count": count})
+
+    if new_topic_suggestions:
+        recommendations.append({
+            "type": "create_topics",
+            "priority": "low",
+            "title": "创建新主题建议",
+            "description": f"发现 {len(new_topic_suggestions)} 个频繁出现的词汇，可以创建为新主题",
+            "suggestions": new_topic_suggestions[:5]
+        })
+
+    # Recommend adjusting priorities
+    topic_activity = []
+    for topic in topics:
+        topic_name = topic['name'].lower()
+        mentions = sum(1 for entry in entries if topic_name in entry.get('content', '').lower())
+        current_priority = config.get('topic_priorities', {}).get(topic['id'], 3)
+        if mentions > 10 and current_priority < 4:
+            topic_activity.append((topic, mentions, current_priority))
+
+    if topic_activity:
+        recommendations.append({
+            "type": "adjust_priorities",
+            "priority": "low",
+            "title": "调整主题优先级",
+            "description": f"建议提高 {len(topic_activity)} 个高频主题的优先级",
+            "topics": [{"id": topic['id'], "name": topic['name'], "mentions": mentions}
+                      for topic, mentions, _ in topic_activity[:3]]
+        })
+
+    return recommendations
+
+def find_frequent_phrases(entries):
+    """Find frequently mentioned phrases that could become topics"""
+    import re
+    from collections import Counter
+
+    # Extract all text
+    all_text = " ".join(entry.get('content', '') for entry in entries).lower()
+
+    # Find potential topic phrases (2-4 characters for Chinese, 3-15 chars for others)
+    chinese_phrases = re.findall(r'[\u4e00-\u9fff]{2,4}', all_text)
+    english_phrases = re.findall(r'\b[a-zA-Z]{3,15}\b', all_text)
+
+    # Count frequencies
+    phrase_counts = Counter(chinese_phrases + english_phrases)
+
+    # Filter out common words and return top phrases
+    common_words = {'的', '了', '是', '在', '有', '和', '我', '你', '他', '她', '它', 'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use'}
+
+    filtered_phrases = [(phrase, count) for phrase, count in phrase_counts.most_common(20)
+                       if phrase not in common_words and len(phrase) > 1]
+
+    return filtered_phrases
+
+def analyze_activity_patterns(entries, topics):
+    """Analyze when topics are most active"""
+    from datetime import datetime
+    import calendar
+
+    patterns = {
+        "hourly": {},
+        "daily": {},
+        "monthly": {}
+    }
+
+    for entry in entries:
+        created_at = entry.get('createdAt', '')
+        if created_at:
+            try:
+                date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                hour = date.hour
+                day = calendar.day_name[date.weekday()]
+                month = calendar.month_name[date.month]
+
+                patterns["hourly"][hour] = patterns["hourly"].get(hour, 0) + 1
+                patterns["daily"][day] = patterns["daily"].get(day, 0) + 1
+                patterns["monthly"][month] = patterns["monthly"].get(month, 0) + 1
+            except:
+                continue
+
+    return {
+        "peak_hour": max(patterns["hourly"].items(), key=lambda x: x[1]) if patterns["hourly"] else None,
+        "peak_day": max(patterns["daily"].items(), key=lambda x: x[1]) if patterns["daily"] else None,
+        "peak_month": max(patterns["monthly"].items(), key=lambda x: x[1]) if patterns["monthly"] else None,
+        "hourly_distribution": patterns["hourly"],
+        "daily_distribution": patterns["daily"],
+        "monthly_distribution": patterns["monthly"]
+    }
+
+def analyze_topic_relationships(entries, topics):
+    """Analyze which topics frequently appear together"""
+    topic_cooccurrence = {}
+
+    for entry in entries:
+        content = entry.get('content', '').lower()
+        mentioned_topics = []
+
+        for topic in topics:
+            if topic['name'].lower() in content:
+                mentioned_topics.append(topic['id'])
+
+        # Record co-occurrences
+        for i, topic1 in enumerate(mentioned_topics):
+            for topic2 in mentioned_topics[i+1:]:
+                pair = tuple(sorted([topic1, topic2]))
+                topic_cooccurrence[pair] = topic_cooccurrence.get(pair, 0) + 1
+
+    # Get top relationships
+    top_relationships = sorted(topic_cooccurrence.items(), key=lambda x: x[1], reverse=True)[:10]
+
+    relationships = []
+    for (topic1_id, topic2_id), count in top_relationships:
+        topic1_name = next((t['name'] for t in topics if t['id'] == topic1_id), topic1_id)
+        topic2_name = next((t['name'] for t in topics if t['id'] == topic2_id), topic2_id)
+
+        relationships.append({
+            "topic1": {"id": topic1_id, "name": topic1_name},
+            "topic2": {"id": topic2_id, "name": topic2_name},
+            "cooccurrence_count": count
+        })
+
+    return relationships
+
 # Add a new endpoint to find entries related to a specific topic
 @app.get("/api/topic-entries/{topic_id}")
 async def get_topic_entries(topic_id: str, concise: bool = False):
@@ -2630,4 +3424,11 @@ async def get_topic_entries(topic_id: str, concise: bool = False):
         return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=3001) 
+    # Start the topic detection scheduler
+    task_scheduler.start_scheduler()
+
+    try:
+        uvicorn.run(app, host="0.0.0.0", port=3001)
+    finally:
+        # Stop scheduler on shutdown
+        task_scheduler.stop_scheduler()
