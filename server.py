@@ -82,6 +82,30 @@ class EntryUpdate(BaseModel):
 class TopicExtractRequest(BaseModel):
     content: str
 
+# Topic Configuration Models
+class CustomTopic(BaseModel):
+    name: str
+    keywords: List[str]
+    color: Optional[str] = None
+    category: str = "custom"
+
+class TopicConfigUpdate(BaseModel):
+    visible_topics: Optional[List[str]] = None
+    hidden_topics: Optional[List[str]] = None
+    topic_priorities: Optional[Dict[str, int]] = None
+    auto_detection_enabled: Optional[bool] = None
+    auto_detection_frequency: Optional[str] = None
+    min_mentions: Optional[int] = None
+    categories_enabled: Optional[List[str]] = None
+
+class TopicVisibilityUpdate(BaseModel):
+    topic_id: str
+    visible: bool
+
+class TopicPriorityUpdate(BaseModel):
+    topic_id: str
+    priority: int
+
 # Temporarily disabled voice input functionality
 # Load Whisper model - use base model to reduce CPU usage
 # model = None  # Initialize as None, load only when needed
@@ -99,6 +123,8 @@ data_dir = Path('./data')
 data_path = data_dir / 'entries.json'
 topics_path = data_dir / 'topics.json'
 graph_path = data_dir / 'topic_graph.json'
+topic_config_path = data_dir / 'topic_config.json'
+topic_suggestions_path = data_dir / 'topic_suggestions.json'
 
 # Enhanced ensure_data_file function with debugging
 def ensure_data_file():
@@ -157,6 +183,41 @@ def ensure_data_file():
                 graph_data = nx.node_link_data(graph)
                 with open(graph_path, 'w') as f:
                     json.dump(graph_data, f)
+
+        # Check if topic config file exists, create if not
+        if not topic_config_path.exists():
+            print(f"Creating new topic config file at {topic_config_path.absolute()}")
+            default_config = {
+                "visible_topics": [],
+                "hidden_topics": [],
+                "custom_topics": [],
+                "topic_priorities": {},
+                "auto_detection_settings": {
+                    "enabled": True,
+                    "frequency": "weekly",
+                    "min_mentions": 3,
+                    "categories_enabled": ["people", "projects", "activities", "places"]
+                },
+                "display_settings": {
+                    "max_topics_shown": 15,
+                    "sort_by": "priority",
+                    "group_by_category": False
+                }
+            }
+            with open(topic_config_path, 'w') as f:
+                json.dump(default_config, f, ensure_ascii=False, indent=2)
+
+        # Check if topic suggestions file exists, create if not
+        if not topic_suggestions_path.exists():
+            print(f"Creating new topic suggestions file at {topic_suggestions_path.absolute()}")
+            default_suggestions = {
+                "pending_review": [],
+                "auto_approved": [],
+                "rejected": [],
+                "last_detection_run": None
+            }
+            with open(topic_suggestions_path, 'w') as f:
+                json.dump(default_suggestions, f, ensure_ascii=False, indent=2)
         
         # If entries exist but no graph data, extract topics from existing entries
         if entries_exist and not graph_exists and USE_AI_FOR_TOPICS:
@@ -177,31 +238,249 @@ def process_existing_entries():
         if not USE_AI_FOR_TOPICS:
             print("AI topic extraction is disabled by configuration")
             return
-        
+
         # Load all entries
         with open(data_path, 'r') as f:
             entries = json.load(f)
-        
+
         if not entries:
             print("No entries to process")
             return
-            
+
         print(f"Processing {len(entries)} existing entries for topic extraction...")
-        
+
         # Combine all entry content for bulk processing
         combined_content = "\n\n".join([entry.get('content', '') for entry in entries])
-        
+
         # Extract topics from combined content
         topics_result = extract_topics(combined_content)
-        
+
         # Save extracted topics
         with open(topics_path, 'w') as f:
             json.dump(topics_result, f, ensure_ascii=False, indent=2)
-            
+
         print(f"Topic extraction complete. Found {len(topics_result.get('topics', []))} topics and {len(topics_result.get('people', []))} people.")
-        
+
     except Exception as e:
         print(f"Error processing existing entries: {e}")
+
+# Topic Configuration Management Functions
+def load_topic_config():
+    """Load user topic configuration"""
+    try:
+        ensure_data_file()
+        with open(topic_config_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading topic config: {e}")
+        # Return default config
+        return {
+            "visible_topics": [],
+            "hidden_topics": [],
+            "custom_topics": [],
+            "topic_priorities": {},
+            "auto_detection_settings": {
+                "enabled": True,
+                "frequency": "weekly",
+                "min_mentions": 3,
+                "categories_enabled": ["people", "projects", "activities", "places"]
+            },
+            "display_settings": {
+                "max_topics_shown": 15,
+                "sort_by": "priority",
+                "group_by_category": False
+            }
+        }
+
+def save_topic_config(config):
+    """Save user topic configuration"""
+    try:
+        ensure_data_file()
+        with open(topic_config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"Error saving topic config: {e}")
+        return False
+
+def load_topic_suggestions():
+    """Load topic suggestions"""
+    try:
+        ensure_data_file()
+        with open(topic_suggestions_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading topic suggestions: {e}")
+        return {
+            "pending_review": [],
+            "auto_approved": [],
+            "rejected": [],
+            "last_detection_run": None
+        }
+
+def save_topic_suggestions(suggestions):
+    """Save topic suggestions"""
+    try:
+        ensure_data_file()
+        with open(topic_suggestions_path, 'w', encoding='utf-8') as f:
+            json.dump(suggestions, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"Error saving topic suggestions: {e}")
+        return False
+
+def get_all_available_topics():
+    """Get all topics from both graph and topics files"""
+    all_topics = []
+
+    # Load from graph file
+    try:
+        with open(graph_path, 'r', encoding='utf-8') as f:
+            graph_data = json.load(f)
+            for node in graph_data.get('nodes', []):
+                if node.get('type') in ['topic', 'person']:
+                    all_topics.append({
+                        'id': node.get('id'),
+                        'name': node.get('name'),
+                        'type': node.get('type'),
+                        'category': node.get('category', 'activities'),
+                        'importance': node.get('importance', 3),
+                        'sentiment': node.get('sentiment', 0),
+                        'context': node.get('context', ''),
+                        'keywords': node.get('keywords', [])
+                    })
+    except Exception as e:
+        print(f"Error loading topics from graph: {e}")
+
+    # Load from topics file
+    try:
+        with open(topics_path, 'r', encoding='utf-8') as f:
+            topics_data = json.load(f)
+
+            # Add topics
+            for topic in topics_data.get('topics', []):
+                # Check if already exists
+                if not any(t['id'] == topic.get('id') for t in all_topics):
+                    all_topics.append({
+                        'id': topic.get('id'),
+                        'name': topic.get('name'),
+                        'type': 'topic',
+                        'category': topic.get('category', 'activities'),
+                        'importance': topic.get('importance', 3),
+                        'sentiment': topic.get('sentiment', 0),
+                        'context': topic.get('context', ''),
+                        'keywords': topic.get('keywords', [])
+                    })
+
+            # Add people
+            for person in topics_data.get('people', []):
+                # Check if already exists
+                if not any(t['id'] == person.get('id') for t in all_topics):
+                    all_topics.append({
+                        'id': person.get('id'),
+                        'name': person.get('name'),
+                        'type': 'person',
+                        'category': 'people',
+                        'importance': person.get('importance', 3),
+                        'sentiment': 0,
+                        'context': person.get('context', ''),
+                        'keywords': person.get('keywords', [])
+                    })
+    except Exception as e:
+        print(f"Error loading topics from topics file: {e}")
+
+    return all_topics
+
+def has_related_content(topic_id, topic_name):
+    """Check if a topic has related content in diary entries"""
+    try:
+        # Load all entries
+        with open(data_path, 'r', encoding='utf-8') as f:
+            entries = json.load(f)
+
+        if not entries:
+            return False
+
+        # Check if topic name appears in any entry content
+        topic_name_lower = topic_name.lower()
+        for entry in entries:
+            content = entry.get('content', '').lower()
+            if topic_name_lower in content:
+                return True
+
+        return False
+    except Exception as e:
+        print(f"Error checking related content for topic {topic_id}: {e}")
+        return True  # Default to showing the topic if we can't check
+
+def get_user_visible_topics():
+    """Get topics that should be visible to the user based on their configuration"""
+    config = load_topic_config()
+    all_topics = get_all_available_topics()
+
+    # Add custom topics
+    custom_topics = config.get('custom_topics', [])
+    for custom_topic in custom_topics:
+        all_topics.append({
+            'id': custom_topic.get('id'),
+            'name': custom_topic.get('name'),
+            'type': 'custom',
+            'category': custom_topic.get('category', 'custom'),
+            'importance': custom_topic.get('priority', 3),
+            'sentiment': 0,
+            'context': f"Custom topic: {custom_topic.get('name')}",
+            'keywords': custom_topic.get('keywords', []),
+            'color': custom_topic.get('color')
+        })
+
+    # Filter out topics without related content (except custom topics)
+    topics_with_content = []
+    for topic in all_topics:
+        if topic.get('type') == 'custom':
+            # Always include custom topics
+            topics_with_content.append(topic)
+        else:
+            # Check if topic has related content
+            if has_related_content(topic['id'], topic['name']):
+                topics_with_content.append(topic)
+            else:
+                print(f"Filtering out topic '{topic['name']}' - no related content found")
+
+    # Filter based on user preferences
+    visible_topic_ids = set(config.get('visible_topics', []))
+    hidden_topic_ids = set(config.get('hidden_topics', []))
+
+    # If no explicit visible topics set, show all except hidden
+    if not visible_topic_ids:
+        visible_topics = [t for t in topics_with_content if t['id'] not in hidden_topic_ids]
+    else:
+        visible_topics = [t for t in topics_with_content if t['id'] in visible_topic_ids and t['id'] not in hidden_topic_ids]
+
+    # Apply priorities
+    topic_priorities = config.get('topic_priorities', {})
+    for topic in visible_topics:
+        if topic['id'] in topic_priorities:
+            topic['user_priority'] = topic_priorities[topic['id']]
+        else:
+            topic['user_priority'] = topic.get('importance', 3)
+
+    # Sort by priority and importance
+    display_settings = config.get('display_settings', {})
+    sort_by = display_settings.get('sort_by', 'priority')
+
+    if sort_by == 'priority':
+        visible_topics.sort(key=lambda x: (x.get('user_priority', 3), x.get('importance', 3)), reverse=True)
+    elif sort_by == 'name':
+        visible_topics.sort(key=lambda x: x.get('name', ''))
+    elif sort_by == 'category':
+        visible_topics.sort(key=lambda x: (x.get('category', ''), x.get('name', '')))
+
+    # Limit number of topics shown
+    max_topics = display_settings.get('max_topics_shown', 15)
+    if max_topics > 0:
+        visible_topics = visible_topics[:max_topics]
+
+    return visible_topics
 
 # Optimize text format using OpenAI
 def optimize_text(content: str) -> str:
@@ -1831,6 +2110,343 @@ async def toggle_ai_topics(enable: Optional[bool] = None):
 async def ai_topics_status():
     """Return the current status of AI for topic extraction"""
     return {"aiEnabled": USE_AI_FOR_TOPICS}
+
+# Topic Configuration Endpoints
+
+@app.get("/api/topic-config")
+async def get_topic_config():
+    """Get user topic configuration"""
+    try:
+        config = load_topic_config()
+        return {"status": "success", "config": config}
+    except Exception as e:
+        print(f"Error getting topic config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/topic-config")
+async def update_topic_config(config_update: TopicConfigUpdate):
+    """Update user topic configuration"""
+    try:
+        current_config = load_topic_config()
+
+        # Update only provided fields
+        if config_update.visible_topics is not None:
+            current_config["visible_topics"] = config_update.visible_topics
+        if config_update.hidden_topics is not None:
+            current_config["hidden_topics"] = config_update.hidden_topics
+        if config_update.topic_priorities is not None:
+            current_config["topic_priorities"].update(config_update.topic_priorities)
+        if config_update.auto_detection_enabled is not None:
+            current_config["auto_detection_settings"]["enabled"] = config_update.auto_detection_enabled
+        if config_update.auto_detection_frequency is not None:
+            current_config["auto_detection_settings"]["frequency"] = config_update.auto_detection_frequency
+        if config_update.min_mentions is not None:
+            current_config["auto_detection_settings"]["min_mentions"] = config_update.min_mentions
+        if config_update.categories_enabled is not None:
+            current_config["auto_detection_settings"]["categories_enabled"] = config_update.categories_enabled
+
+        success = save_topic_config(current_config)
+        if success:
+            return {"status": "success", "config": current_config}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save configuration")
+    except Exception as e:
+        print(f"Error updating topic config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/topics/visible")
+async def get_visible_topics():
+    """Get topics that should be visible to the user"""
+    try:
+        visible_topics = get_user_visible_topics()
+        return {"status": "success", "topics": visible_topics}
+    except Exception as e:
+        print(f"Error getting visible topics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/topics/all")
+async def get_all_topics():
+    """Get all available topics"""
+    try:
+        all_topics = get_all_available_topics()
+        config = load_topic_config()
+
+        # Add visibility and priority information
+        visible_topic_ids = set(config.get('visible_topics', []))
+        hidden_topic_ids = set(config.get('hidden_topics', []))
+        topic_priorities = config.get('topic_priorities', {})
+
+        for topic in all_topics:
+            topic_id = topic['id']
+            topic['is_visible'] = topic_id in visible_topic_ids or (not visible_topic_ids and topic_id not in hidden_topic_ids)
+            topic['is_hidden'] = topic_id in hidden_topic_ids
+            topic['user_priority'] = topic_priorities.get(topic_id, topic.get('importance', 3))
+
+        return {"status": "success", "topics": all_topics}
+    except Exception as e:
+        print(f"Error getting all topics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/topics/visibility")
+async def update_topic_visibility(visibility_update: TopicVisibilityUpdate):
+    """Update visibility of a specific topic"""
+    try:
+        config = load_topic_config()
+        topic_id = visibility_update.topic_id
+        visible = visibility_update.visible
+
+        visible_topics = set(config.get('visible_topics', []))
+        hidden_topics = set(config.get('hidden_topics', []))
+
+        if visible:
+            # Make topic visible
+            visible_topics.add(topic_id)
+            hidden_topics.discard(topic_id)
+        else:
+            # Hide topic
+            hidden_topics.add(topic_id)
+            visible_topics.discard(topic_id)
+
+        config['visible_topics'] = list(visible_topics)
+        config['hidden_topics'] = list(hidden_topics)
+
+        success = save_topic_config(config)
+        if success:
+            return {"status": "success", "message": f"Topic visibility updated"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save configuration")
+    except Exception as e:
+        print(f"Error updating topic visibility: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/topics/priority")
+async def update_topic_priority(priority_update: TopicPriorityUpdate):
+    """Update priority of a specific topic"""
+    try:
+        config = load_topic_config()
+        topic_id = priority_update.topic_id
+        priority = priority_update.priority
+
+        # Validate priority range
+        if priority < 1 or priority > 5:
+            raise HTTPException(status_code=400, detail="Priority must be between 1 and 5")
+
+        config['topic_priorities'][topic_id] = priority
+
+        success = save_topic_config(config)
+        if success:
+            return {"status": "success", "message": f"Topic priority updated to {priority}"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save configuration")
+    except Exception as e:
+        print(f"Error updating topic priority: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/topics/custom")
+async def create_custom_topic(custom_topic: CustomTopic):
+    """Create a new custom topic"""
+    try:
+        config = load_topic_config()
+
+        # Generate unique ID for custom topic
+        import uuid
+        topic_id = f"custom_{uuid.uuid4().hex[:8]}"
+
+        # Generate color if not provided
+        if not custom_topic.color:
+            import random
+            colors = ["#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4", "#feca57", "#ff9ff3", "#54a0ff", "#5f27cd"]
+            custom_topic.color = random.choice(colors)
+
+        new_custom_topic = {
+            "id": topic_id,
+            "name": custom_topic.name,
+            "keywords": custom_topic.keywords,
+            "color": custom_topic.color,
+            "category": custom_topic.category,
+            "created_at": datetime.now().isoformat(),
+            "priority": 3
+        }
+
+        config['custom_topics'].append(new_custom_topic)
+
+        # Make it visible by default
+        if topic_id not in config.get('visible_topics', []):
+            config.setdefault('visible_topics', []).append(topic_id)
+
+        success = save_topic_config(config)
+        if success:
+            return {"status": "success", "topic": new_custom_topic}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save custom topic")
+    except Exception as e:
+        print(f"Error creating custom topic: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/topics/custom/{topic_id}")
+async def delete_custom_topic(topic_id: str):
+    """Delete a custom topic"""
+    try:
+        config = load_topic_config()
+
+        # Find and remove the custom topic
+        custom_topics = config.get('custom_topics', [])
+        original_count = len(custom_topics)
+        config['custom_topics'] = [t for t in custom_topics if t.get('id') != topic_id]
+
+        if len(config['custom_topics']) == original_count:
+            raise HTTPException(status_code=404, detail="Custom topic not found")
+
+        # Remove from visible/hidden lists
+        if 'visible_topics' in config:
+            config['visible_topics'] = [t for t in config['visible_topics'] if t != topic_id]
+        if 'hidden_topics' in config:
+            config['hidden_topics'] = [t for t in config['hidden_topics'] if t != topic_id]
+
+        # Remove from priorities
+        if topic_id in config.get('topic_priorities', {}):
+            del config['topic_priorities'][topic_id]
+
+        success = save_topic_config(config)
+        if success:
+            return {"status": "success", "message": "Custom topic deleted"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete custom topic")
+    except Exception as e:
+        print(f"Error deleting custom topic: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/topic-suggestions")
+async def get_topic_suggestions():
+    """Get pending topic suggestions for user review"""
+    try:
+        suggestions = load_topic_suggestions()
+        return {"status": "success", "suggestions": suggestions}
+    except Exception as e:
+        print(f"Error getting topic suggestions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/topic-suggestions/approve/{suggestion_id}")
+async def approve_topic_suggestion(suggestion_id: str):
+    """Approve a topic suggestion and add it to visible topics"""
+    try:
+        suggestions = load_topic_suggestions()
+        config = load_topic_config()
+
+        # Find the suggestion
+        pending = suggestions.get('pending_review', [])
+        suggestion = None
+        for i, s in enumerate(pending):
+            if s.get('id') == suggestion_id:
+                suggestion = pending.pop(i)
+                break
+
+        if not suggestion:
+            raise HTTPException(status_code=404, detail="Suggestion not found")
+
+        # Move to approved
+        suggestions.setdefault('auto_approved', []).append(suggestion)
+
+        # Add to visible topics
+        config.setdefault('visible_topics', []).append(suggestion_id)
+
+        # Save both files
+        save_topic_suggestions(suggestions)
+        save_topic_config(config)
+
+        return {"status": "success", "message": "Topic suggestion approved"}
+    except Exception as e:
+        print(f"Error approving topic suggestion: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/topic-suggestions/reject/{suggestion_id}")
+async def reject_topic_suggestion(suggestion_id: str):
+    """Reject a topic suggestion"""
+    try:
+        suggestions = load_topic_suggestions()
+
+        # Find the suggestion
+        pending = suggestions.get('pending_review', [])
+        suggestion = None
+        for i, s in enumerate(pending):
+            if s.get('id') == suggestion_id:
+                suggestion = pending.pop(i)
+                break
+
+        if not suggestion:
+            raise HTTPException(status_code=404, detail="Suggestion not found")
+
+        # Move to rejected
+        suggestions.setdefault('rejected', []).append(suggestion)
+
+        save_topic_suggestions(suggestions)
+
+        return {"status": "success", "message": "Topic suggestion rejected"}
+    except Exception as e:
+        print(f"Error rejecting topic suggestion: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/topics/bulk-visibility")
+async def update_bulk_topic_visibility(updates: List[TopicVisibilityUpdate]):
+    """Update visibility for multiple topics at once"""
+    try:
+        config = load_topic_config()
+        visible_topics = set(config.get('visible_topics', []))
+        hidden_topics = set(config.get('hidden_topics', []))
+
+        for update in updates:
+            topic_id = update.topic_id
+            visible = update.visible
+
+            if visible:
+                visible_topics.add(topic_id)
+                hidden_topics.discard(topic_id)
+            else:
+                hidden_topics.add(topic_id)
+                visible_topics.discard(topic_id)
+
+        config['visible_topics'] = list(visible_topics)
+        config['hidden_topics'] = list(hidden_topics)
+
+        success = save_topic_config(config)
+        if success:
+            return {"status": "success", "message": f"Updated visibility for {len(updates)} topics"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save configuration")
+    except Exception as e:
+        print(f"Error updating bulk topic visibility: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/topics/reset-config")
+async def reset_topic_config():
+    """Reset topic configuration to defaults"""
+    try:
+        default_config = {
+            "visible_topics": [],
+            "hidden_topics": [],
+            "custom_topics": [],
+            "topic_priorities": {},
+            "auto_detection_settings": {
+                "enabled": True,
+                "frequency": "weekly",
+                "min_mentions": 3,
+                "categories_enabled": ["people", "projects", "activities", "places"]
+            },
+            "display_settings": {
+                "max_topics_shown": 15,
+                "sort_by": "priority",
+                "group_by_category": False
+            }
+        }
+
+        success = save_topic_config(default_config)
+        if success:
+            return {"status": "success", "message": "Topic configuration reset to defaults", "config": default_config}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to reset configuration")
+    except Exception as e:
+        print(f"Error resetting topic config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Add a new endpoint to find entries related to a specific topic
 @app.get("/api/topic-entries/{topic_id}")

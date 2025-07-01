@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './App.css';
 import DiaryCalendar from './components/DiaryCalendar';
-import TopicDiaries from './components/TopicDiaries';
+
 import TopicGraph from './components/TopicGraph';
+import TopicConfigManager from './components/TopicConfigManager';
 
 function App() {
   const [entries, setEntries] = useState([]);
@@ -29,8 +30,8 @@ function App() {
   const [themeCurrentPage, setThemeCurrentPage] = useState(1);
   const [themeEntriesPerPage] = useState(3);
   const [themeSortNewestFirst, setThemeSortNewestFirst] = useState(true);
-  // Add state for topic diaries view
-  const [showTopicDiaries, setShowTopicDiaries] = useState(false);
+  // Add state for topic management modal
+  const [showTopicManager, setShowTopicManager] = useState(false);
   
   // No static themes - all topics should come from actual diary entries
 
@@ -319,7 +320,19 @@ function App() {
   const fetchTopicThreads = async () => {
     setIsLoadingTopics(true);
     try {
-      // First try to get topics from GraphQL endpoint
+      // Use the new topic configuration API to get user's visible topics
+      const response = await fetch('http://localhost:3001/api/topics/visible');
+      const data = await response.json();
+
+      if (data.status === 'success') {
+        console.log('Topics loaded from topic configuration API');
+        setDynamicTopics(data.topics);
+        setIsLoadingTopics(false);
+        return;
+      }
+
+      // Fall back to GraphQL endpoint if topic config API fails
+      console.log('Falling back to GraphQL endpoint for topics');
       const graphqlResponse = await fetch('http://localhost:3001/graphql', {
         method: 'POST',
         headers: {
@@ -360,14 +373,14 @@ function App() {
       });
 
       const graphqlData = await graphqlResponse.json();
-      
+
       if (graphqlData && graphqlData.data && graphqlData.data.topicGraph) {
         console.log('Topics loaded from GraphQL endpoint');
-        
+
         // Process the topics and people data
         const topics = graphqlData.data.topicGraph.topics || [];
         const people = graphqlData.data.topicGraph.people || [];
-        
+
         // Combine topics and people with proper formatting
         const formattedTopics = [
           ...topics.map(topic => ({
@@ -380,12 +393,12 @@ function App() {
           ...people.map(person => ({
             id: person.id,
             name: person.name,
-            type: 'person', 
+            type: 'person',
             category: 'people',
             importance: person.importance || 3
           }))
         ];
-        
+
         // Sort by importance (highest first) and then by name
         formattedTopics.sort((a, b) => {
           if (b.importance !== a.importance) {
@@ -393,26 +406,27 @@ function App() {
           }
           return a.name.localeCompare(b.name);
         });
-        
+
         setDynamicTopics(formattedTopics);
         setIsLoadingTopics(false);
         return;
       }
 
-      // Fall back to the old API if GraphQL fails
-      console.log('Falling back to API endpoint for topics');
-      const response = await fetch('http://localhost:3001/api/topic-threads');
-      const data = await response.json();
-      setDynamicTopics(data.topics);
+      // Final fallback to the old API
+      console.log('Falling back to topic-threads API endpoint');
+      const fallbackResponse = await fetch('http://localhost:3001/api/topic-threads');
+      const fallbackData = await fallbackResponse.json();
+      setDynamicTopics(fallbackData.topics || []);
     } catch (error) {
       console.error('Error fetching topics:', error);
-      // Try fallback API if GraphQL fails
+      // Try final fallback API
       try {
         const response = await fetch('http://localhost:3001/api/topic-threads');
         const data = await response.json();
-        setDynamicTopics(data.topics);
+        setDynamicTopics(data.topics || []);
       } catch (fallbackError) {
         console.error('Error with fallback topic fetch:', fallbackError);
+        setDynamicTopics([]);
       }
     } finally {
       setIsLoadingTopics(false);
@@ -555,11 +569,7 @@ function App() {
     setActiveTab(tab);
   };
 
-  // Toggle sort order
-  const toggleSortOrder = () => {
-    setSortNewestFirst(!sortNewestFirst);
-    setCurrentPage(1); // Reset to first page when changing sort order
-  };
+
 
   // Get current entries for pagination
   const getCurrentEntries = () => {
@@ -583,7 +593,6 @@ function App() {
   const handleViewAllTopicEntries = () => {
     if (selectedTheme) {
       setActiveTab('diary');
-      setShowTopicDiaries(true);
     }
   };
 
@@ -605,13 +614,13 @@ function App() {
               className={`nav-link ${activeTab === 'home' ? 'active' : ''}`}
               onClick={() => handleTabChange('home')}
             >首页</a>
-            <a 
-              href="#" 
+            <a
+              href="#"
               className={`nav-link ${activeTab === 'diary' ? 'active' : ''}`}
               onClick={() => handleTabChange('diary')}
             >主题</a>
-            <a 
-              href="#" 
+            <a
+              href="#"
               className={`nav-link ${activeTab === 'calendar' ? 'active' : ''}`}
               onClick={() => handleTabChange('calendar')}
             >日历</a>
@@ -803,9 +812,12 @@ function App() {
                         ))}
                       </div>
                       <div className="theme-actions">
-                        <button className="add-theme-button">
-                          <span className="plus-icon">+</span>
-                          <span>添加主题</span>
+                        <button
+                          className="add-theme-button"
+                          onClick={() => setShowTopicManager(true)}
+                        >
+                          <span className="plus-icon">⚙️</span>
+                          <span>管理主题</span>
                         </button>
                       </div>
                     </>
@@ -877,6 +889,26 @@ function App() {
             )}
           </div>
         </main>
+
+        {/* Topic Management Modal */}
+        {showTopicManager && (
+          <div className="modal-overlay" onClick={() => setShowTopicManager(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>主题管理</h2>
+                <button
+                  className="modal-close-button"
+                  onClick={() => setShowTopicManager(false)}
+                >
+                  ×
+                </button>
+              </div>
+              <div className="modal-body">
+                <TopicConfigManager onTopicsUpdated={fetchTopicThreads} />
+              </div>
+            </div>
+          </div>
+        )}
 
         <aside className="calendar-container">
           <h2 className="calendar-title">日历</h2>

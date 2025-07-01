@@ -55,7 +55,6 @@ settings.json
 # Documents
 documents/
 *.md
-*.txt
 *.pdf
 *.docx
 *.doc
