@@ -417,9 +417,11 @@ const TopicConfigManager = ({ onTopicsUpdated }) => {
       'projects': '📁',
       'activities': '🎯',
       'places': '📍',
-      'custom': '⭐',
+      'animals': '🐾',
+      'objects': '🔧',
+      'technologies': '💻',
       'concepts': '💡',
-      'technologies': '⚙️',
+      'custom': '⭐',
       'skills': '🎓'
     };
     return icons[category] || '📝';

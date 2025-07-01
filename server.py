@@ -827,21 +827,27 @@ def extract_topics(content: str) -> dict:
                         "role": "system",
                         "content": """You are an intelligent diary topic extraction assistant. Your goal is to create granular, specific topics that can be easily organized and deduplicated. Analyze the provided diary entry to identify:
 
-1. TOPICS: Extract very specific, atomic topics. Break down complex subjects into individual components.
+1. TOPICS: Extract NOUNS ONLY - people, places, objects, projects, concepts, technologies
 2. PEOPLE: Extract individual person names only (not groups or relationships)
-3. RELATIONS: Connections between topics and people
+3. RELATIONS: Actions, verbs, and activities that connect topics and people
+
+CRITICAL RULE: TOPICS MUST BE NOUNS ONLY
+- Topics should be things, not actions
+- Actions/verbs become relations between topics
+- Focus on entities: people, places, projects, objects, concepts, tools
 
 TOPIC EXTRACTION PRINCIPLES:
+- Extract only NOUNS: person, project, place, object, concept, technology, animal
+- NO VERBS or ACTIONS as topics (these become relations)
 - Make each topic as SMALL and SPECIFIC as possible
-- Extract individual person names separately from person-related activities
-- Break down compound topics into atomic components
+- Break down compound topics into atomic noun components
 - Use consistent naming (e.g., always use full names, consistent terminology)
-- Avoid generic terms - be specific
 
-Examples of GOOD topic extraction:
-- Instead of "Liu Jian项目": Extract "Liu Jian" (person) + "项目管理" (topic) + "工作协作" (topic)
-- Instead of "智能OA系统开发": Extract "OA系统" (topic) + "系统开发" (topic) + "智能化" (topic)
-- Instead of "杭州旅行": Extract "杭州" (place) + "旅行" (activity)
+Examples of CORRECT topic extraction:
+- "Liu Jian开发项目" → "Liu Jian" (person) + "项目" (project) + relation: "develops"
+- "智能OA系统开发" → "OA系统" (object) + "智能化" (concept) + relation: "develops"
+- "杭州旅行" → "杭州" (place) + relation: "visits"
+- "学习Python" → "Python" (technology) + relation: "learns"
 
 Extract these elements in a structured JSON format:
 {
@@ -849,8 +855,8 @@ Extract these elements in a structured JSON format:
     {
       "id": "unique_string_id",
       "name": "Specific Topic Name",
-      "type": "concept|activity|object|skill|technology|event",
-      "category": "projects|places|activities|concepts|technologies|skills",
+      "type": "concept|object|project|technology|place|animal",
+      "category": "projects|places|objects|concepts|technologies|animals",
       "importance": 1-5,
       "sentiment": -2 to +2,
       "context": "Brief context",
@@ -871,27 +877,29 @@ Extract these elements in a structured JSON format:
     {
       "source": "topic_or_person_id",
       "target": "topic_or_person_id",
-      "type": "works_on|collaborates_with|located_in|uses|participates_in",
+      "type": "works_on|collaborates_with|located_in|uses|develops|learns|visits|owns|manages|creates",
       "strength": 1-5
     }
   ]
 }
 
-CATEGORIES:
-- "projects": Work/personal projects, ongoing initiatives
-- "places": Specific locations, venues, cities, countries
-- "activities": Actions, events, experiences, hobbies
-- "concepts": Ideas, methodologies, abstract concepts
-- "technologies": Tools, software, technical systems
-- "skills": Abilities, competencies, learning areas
+CATEGORIES (NOUNS ONLY):
+- "projects": Work/personal projects, ongoing initiatives (NOUNS)
+- "places": Specific locations, venues, cities, countries (NOUNS)
+- "objects": Physical items, tools, systems, products (NOUNS)
+- "concepts": Ideas, methodologies, abstract concepts (NOUNS)
+- "technologies": Tools, software, programming languages, platforms (NOUNS)
+- "animals": Pets, animals mentioned in diary (NOUNS)
 
 IMPORTANT RULES:
-1. Extract topics in the original language (Chinese/English)
-2. Person names should be individual entities, not groups
-3. Break down complex topics into atomic components
-4. Use consistent naming conventions
-5. Add keywords to help with similarity detection
-6. Create relations only for clear, direct connections"""
+1. TOPICS MUST BE NOUNS ONLY - no verbs, no actions, no activities
+2. Actions/verbs become RELATIONS between topics and people
+3. Extract topics in the original language (Chinese/English)
+4. Person names should be individual entities, not groups
+5. Break down complex topics into atomic noun components
+6. Use consistent naming conventions
+7. Add keywords to help with similarity detection
+8. Create relations for actions that connect nouns (verbs like: develops, learns, visits, manages)"""
                 },
                 {
                     "role": "user",
@@ -910,21 +918,27 @@ IMPORTANT RULES:
                         "role": "system",
                         "content": """You are an intelligent diary topic extraction assistant. Your goal is to create granular, specific topics that can be easily organized and deduplicated. Analyze the provided diary entry to identify:
 
-1. TOPICS: Extract very specific, atomic topics. Break down complex subjects into individual components.
+1. TOPICS: Extract NOUNS ONLY - people, places, objects, projects, concepts, technologies
 2. PEOPLE: Extract individual person names only (not groups or relationships)
-3. RELATIONS: Connections between topics and people
+3. RELATIONS: Actions, verbs, and activities that connect topics and people
+
+CRITICAL RULE: TOPICS MUST BE NOUNS ONLY
+- Topics should be things, not actions
+- Actions/verbs become relations between topics
+- Focus on entities: people, places, projects, objects, concepts, tools
 
 TOPIC EXTRACTION PRINCIPLES:
+- Extract only NOUNS: person, project, place, object, concept, technology, animal
+- NO VERBS or ACTIONS as topics (these become relations)
 - Make each topic as SMALL and SPECIFIC as possible
-- Extract individual person names separately from person-related activities
-- Break down compound topics into atomic components
+- Break down compound topics into atomic noun components
 - Use consistent naming (e.g., always use full names, consistent terminology)
-- Avoid generic terms - be specific
 
-Examples of GOOD topic extraction:
-- Instead of "Liu Jian项目": Extract "Liu Jian" (person) + "项目管理" (topic) + "工作协作" (topic)
-- Instead of "智能OA系统开发": Extract "OA系统" (topic) + "系统开发" (topic) + "智能化" (topic)
-- Instead of "杭州旅行": Extract "杭州" (place) + "旅行" (activity)
+Examples of CORRECT topic extraction:
+- "Liu Jian开发项目" → "Liu Jian" (person) + "项目" (project) + relation: "develops"
+- "智能OA系统开发" → "OA系统" (object) + "智能化" (concept) + relation: "develops"
+- "杭州旅行" → "杭州" (place) + relation: "visits"
+- "学习Python" → "Python" (technology) + relation: "learns"
 
 Extract these elements in a structured JSON format:
 {
@@ -932,8 +946,8 @@ Extract these elements in a structured JSON format:
     {
       "id": "unique_string_id",
       "name": "Specific Topic Name",
-      "type": "concept|activity|object|skill|technology|event",
-      "category": "projects|places|activities|concepts|technologies|skills",
+      "type": "concept|object|project|technology|place|animal",
+      "category": "projects|places|objects|concepts|technologies|animals",
       "importance": 1-5,
       "sentiment": -2 to +2,
       "context": "Brief context",
@@ -954,27 +968,29 @@ Extract these elements in a structured JSON format:
     {
       "source": "topic_or_person_id",
       "target": "topic_or_person_id",
-      "type": "works_on|collaborates_with|located_in|uses|participates_in",
+      "type": "works_on|collaborates_with|located_in|uses|develops|learns|visits|owns|manages|creates",
       "strength": 1-5
     }
   ]
 }
 
-CATEGORIES:
-- "projects": Work/personal projects, ongoing initiatives
-- "places": Specific locations, venues, cities, countries
-- "activities": Actions, events, experiences, hobbies
-- "concepts": Ideas, methodologies, abstract concepts
-- "technologies": Tools, software, technical systems
-- "skills": Abilities, competencies, learning areas
+CATEGORIES (NOUNS ONLY):
+- "projects": Work/personal projects, ongoing initiatives (NOUNS)
+- "places": Specific locations, venues, cities, countries (NOUNS)
+- "objects": Physical items, tools, systems, products (NOUNS)
+- "concepts": Ideas, methodologies, abstract concepts (NOUNS)
+- "technologies": Tools, software, programming languages, platforms (NOUNS)
+- "animals": Pets, animals mentioned in diary (NOUNS)
 
 IMPORTANT RULES:
-1. Extract topics in the original language (Chinese/English)
-2. Person names should be individual entities, not groups
-3. Break down complex topics into atomic components
-4. Use consistent naming conventions
-5. Add keywords to help with similarity detection
-6. Create relations only for clear, direct connections"""
+1. TOPICS MUST BE NOUNS ONLY - no verbs, no actions, no activities
+2. Actions/verbs become RELATIONS between topics and people
+3. Extract topics in the original language (Chinese/English)
+4. Person names should be individual entities, not groups
+5. Break down complex topics into atomic noun components
+6. Use consistent naming conventions
+7. Add keywords to help with similarity detection
+8. Create relations for actions that connect nouns (verbs like: develops, learns, visits, manages)"""
                     },
                     {
                         "role": "user",

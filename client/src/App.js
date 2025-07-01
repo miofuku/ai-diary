@@ -832,7 +832,11 @@ function App() {
                                 {theme.category === 'people' ? '👤' :
                                  theme.category === 'projects' ? '📁' :
                                  theme.category === 'activities' ? '🎯' :
-                                 theme.category === 'places' ? '📍' : '📝'}
+                                 theme.category === 'places' ? '📍' :
+                                 theme.category === 'animals' ? '🐾' :
+                                 theme.category === 'objects' ? '🔧' :
+                                 theme.category === 'technologies' ? '💻' :
+                                 theme.category === 'concepts' ? '💡' : '📝'}
                               </span>
                               <span className="theme-name">{theme.name}</span>
                               {theme.user_priority && theme.user_priority > 3 && (
@@ -842,15 +846,7 @@ function App() {
                           ))}
                         </div>
                       </div>
-                      <div className="theme-actions">
-                        <button
-                          className="add-theme-button"
-                          onClick={() => setShowTopicManager(true)}
-                        >
-                          <span className="plus-icon">⚙️</span>
-                          <span>管理主题</span>
-                        </button>
-                      </div>
+
                     </>
                   )}
 
