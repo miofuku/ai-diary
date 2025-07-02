@@ -225,7 +225,7 @@ const TopicConfigManager = ({ onTopicsUpdated }) => {
       const response = await fetch(`http://localhost:3001/api/topics/custom/${topicId}`, {
         method: 'DELETE'
       });
-      
+
       const data = await response.json();
       if (data.status === 'success') {
         loadTopicData();
@@ -238,6 +238,96 @@ const TopicConfigManager = ({ onTopicsUpdated }) => {
     } catch (err) {
       console.error('Error deleting custom topic:', err);
       setError('Failed to delete custom topic');
+    }
+  };
+
+  const deleteTopic = async (topicId, topicName) => {
+    // Show confirmation dialog
+    const confirmed = window.confirm(`确定要删除主题 "${topicName}" 吗？\n\n此操作将：\n- 从所有视图中移除该主题\n- 删除相关的连接关系\n- 无法撤销\n\n确定继续吗？`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:3001/api/topics/${topicId}`, {
+        method: 'DELETE'
+      });
+
+      const data = await response.json();
+      if (data.status === 'success') {
+        loadTopicData();
+        if (onTopicsUpdated) {
+          onTopicsUpdated();
+        }
+        // Show success message
+        alert(`主题 "${topicName}" 已成功删除`);
+      } else {
+        setError('Failed to delete topic');
+      }
+    } catch (err) {
+      console.error('Error deleting topic:', err);
+      setError('Failed to delete topic');
+    }
+  };
+
+  const deleteSelectedTopics = async () => {
+    if (selectedTopics.size === 0) {
+      alert('请先选择要删除的主题');
+      return;
+    }
+
+    const topicNames = Array.from(selectedTopics).map(id => {
+      const topic = [...allTopics, ...visibleTopics].find(t => t.id === id);
+      return topic ? topic.name : id;
+    });
+
+    const confirmed = window.confirm(`确定要删除以下 ${selectedTopics.size} 个主题吗？\n\n${topicNames.join('\n')}\n\n此操作将：\n- 从所有视图中移除这些主题\n- 删除相关的连接关系\n- 无法撤销\n\n确定继续吗？`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const topicId of selectedTopics) {
+        try {
+          const response = await fetch(`http://localhost:3001/api/topics/${topicId}`, {
+            method: 'DELETE'
+          });
+
+          const data = await response.json();
+          if (data.status === 'success') {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (err) {
+          console.error(`Error deleting topic ${topicId}:`, err);
+          errorCount++;
+        }
+      }
+
+      // Clear selection
+      setSelectedTopics(new Set());
+
+      // Reload data
+      loadTopicData();
+      if (onTopicsUpdated) {
+        onTopicsUpdated();
+      }
+
+      // Show result message
+      if (errorCount === 0) {
+        alert(`成功删除 ${successCount} 个主题`);
+      } else {
+        alert(`删除完成：成功 ${successCount} 个，失败 ${errorCount} 个`);
+      }
+    } catch (err) {
+      console.error('Error in bulk delete:', err);
+      setError('批量删除失败');
     }
   };
 
@@ -536,6 +626,9 @@ const TopicConfigManager = ({ onTopicsUpdated }) => {
                   <button onClick={() => bulkUpdateVisibility(false)} className="bulk-hide-button">
                     批量隐藏
                   </button>
+                  <button onClick={deleteSelectedTopics} className="bulk-delete-button">
+                    批量删除
+                  </button>
                   <button onClick={clearSelection} className="clear-selection-button">
                     取消选择
                   </button>
@@ -571,7 +664,7 @@ const TopicConfigManager = ({ onTopicsUpdated }) => {
                     )}
                   </div>
                   <div className="topic-actions">
-                    <select 
+                    <select
                       value={topic.user_priority || 3}
                       onChange={(e) => updateTopicPriority(topic.id, parseInt(e.target.value))}
                       className="priority-select"
@@ -582,11 +675,18 @@ const TopicConfigManager = ({ onTopicsUpdated }) => {
                       <option value={4}>优先级 4</option>
                       <option value={5}>优先级 5</option>
                     </select>
-                    <button 
+                    <button
                       onClick={() => updateTopicVisibility(topic.id, false)}
                       className="hide-button"
                     >
                       隐藏
+                    </button>
+                    <button
+                      onClick={() => deleteTopic(topic.id, topic.name)}
+                      className="delete-button"
+                      title="删除主题"
+                    >
+                      删除
                     </button>
                   </div>
                 </div>
@@ -642,6 +742,9 @@ const TopicConfigManager = ({ onTopicsUpdated }) => {
                   <button onClick={() => bulkUpdateVisibility(false)} className="bulk-hide-button">
                     批量隐藏
                   </button>
+                  <button onClick={deleteSelectedTopics} className="bulk-delete-button">
+                    批量删除
+                  </button>
                   <button onClick={clearSelection} className="clear-selection-button">
                     取消选择
                   </button>
@@ -695,20 +798,19 @@ const TopicConfigManager = ({ onTopicsUpdated }) => {
                     )}
                   </div>
                   <div className="topic-actions">
-                    <button 
+                    <button
                       onClick={() => updateTopicVisibility(topic.id, !topic.is_visible)}
                       className={topic.is_visible ? 'hide-button' : 'show-button'}
                     >
                       {topic.is_visible ? '隐藏' : '显示'}
                     </button>
-                    {topic.type === 'custom' && (
-                      <button 
-                        onClick={() => deleteCustomTopic(topic.id)}
-                        className="delete-button"
-                      >
-                        删除
-                      </button>
-                    )}
+                    <button
+                      onClick={() => deleteTopic(topic.id, topic.name)}
+                      className="delete-button"
+                      title="删除主题"
+                    >
+                      删除
+                    </button>
                   </div>
                 </div>
               ))}

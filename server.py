@@ -427,6 +427,7 @@ class TopicDetectionPipeline:
         self.batch_size = 10
         self.min_queue_size = 3
         self.detection_lock = threading.Lock()
+        self.immediate_detection_enabled = True  # Enable immediate detection for new entries
 
     def add_to_queue(self, entry_id, content, priority='normal'):
         """Add entry to detection queue"""
@@ -441,6 +442,44 @@ class TopicDetectionPipeline:
             self.detection_queue.append(queue_item)
             print(f"Added entry {entry_id} to topic detection queue (queue size: {len(self.detection_queue)})")
 
+            # Trigger immediate detection for high priority entries or new entries
+            if priority == 'high' or priority == 'immediate':
+                print(f"Triggering immediate detection for {priority} priority entry {entry_id}")
+                return True  # Signal that immediate detection should be triggered
+        return False
+
+    async def run_immediate_detection(self, entry_id, content):
+        """Run immediate topic detection for a single entry"""
+        if not self.immediate_detection_enabled:
+            print("Immediate detection is disabled")
+            return
+
+        try:
+            print(f"🚀 Running immediate topic detection for entry {entry_id}")
+
+            # Extract topics for this single entry
+            topics_result = extract_topics(content)
+
+            # Generate topic suggestions for immediate review
+            await self._generate_topic_suggestions(topics_result, [{
+                'entry_id': entry_id,
+                'content': content,
+                'priority': 'immediate',
+                'added_at': datetime.now().isoformat()
+            }])
+
+            # Mark this entry as processed in the queue
+            with self.detection_lock:
+                for item in self.detection_queue:
+                    if item['entry_id'] == entry_id:
+                        item['processed'] = True
+                        break
+
+            print(f"✅ Immediate topic detection completed for entry {entry_id}")
+
+        except Exception as e:
+            print(f"❌ Error in immediate topic detection: {e}")
+
     def should_run_detection(self):
         """Determine if detection should run based on queue size and timing"""
         config = load_topic_config()
@@ -449,25 +488,66 @@ class TopicDetectionPipeline:
         if not auto_settings.get('enabled', True):
             return False
 
-        # Check queue size
+        # Check queue size - be more flexible for new topic discovery
         unprocessed_count = len([item for item in self.detection_queue if not item.get('processed', False)])
-        if unprocessed_count < self.min_queue_size:
+
+        # Allow detection with fewer entries if it's been a while since last run
+        min_queue_threshold = self.min_queue_size
+        if self.last_run:
+            last_run_time = datetime.fromisoformat(self.last_run)
+            hours_since_last_run = (datetime.now() - last_run_time).total_seconds() / 3600
+
+            # Reduce threshold if it's been more than 6 hours since last run
+            if hours_since_last_run > 6:
+                min_queue_threshold = max(1, self.min_queue_size - 1)
+            # Reduce threshold further if it's been more than 24 hours
+            if hours_since_last_run > 24:
+                min_queue_threshold = 1
+
+        if unprocessed_count < min_queue_threshold:
             return False
 
-        # Check timing based on frequency setting
+        # Check timing based on frequency setting - be more lenient for new content
         frequency = auto_settings.get('frequency', 'weekly')
         if self.last_run:
             last_run_time = datetime.fromisoformat(self.last_run)
             now = datetime.now()
+            hours_diff = (now - last_run_time).total_seconds() / 3600
 
-            if frequency == 'daily' and (now - last_run_time).days < 1:
+            # More flexible timing for better new topic discovery
+            if frequency == 'daily' and hours_diff < 12:  # Reduced from 24 hours
                 return False
-            elif frequency == 'weekly' and (now - last_run_time).days < 7:
+            elif frequency == 'weekly' and hours_diff < 72:  # Reduced from 168 hours (7 days)
                 return False
-            elif frequency == 'monthly' and (now - last_run_time).days < 30:
+            elif frequency == 'monthly' and hours_diff < 168:  # Reduced from 720 hours (30 days)
                 return False
 
         return True
+
+    def has_potential_new_topics(self, content: str) -> bool:
+        """Check if content might contain new topics that warrant immediate detection"""
+        if not content:
+            return False
+
+        # Simple heuristics to detect potentially new content
+        # Look for proper nouns, project names, or specific terminology
+        import re
+
+        # Check for capitalized words that might be names or projects
+        capitalized_words = re.findall(r'\b[A-Z][a-z]+\b', content)
+        chinese_names = re.findall(r'[\u4e00-\u9fff]{2,4}', content)  # Chinese names/terms
+
+        # Check for project-like terms
+        project_indicators = ['项目', '系统', '平台', '应用', 'project', 'system', 'platform', 'app']
+        has_project_terms = any(indicator in content.lower() for indicator in project_indicators)
+
+        # Check for person indicators
+        person_indicators = ['老师', '同事', '朋友', '客户', 'teacher', 'colleague', 'friend', 'client']
+        has_person_terms = any(indicator in content.lower() for indicator in person_indicators)
+
+        # If we have multiple capitalized words, Chinese names, or specific indicators, likely new topics
+        return (len(capitalized_words) >= 2 or len(chinese_names) >= 2 or
+                has_project_terms or has_person_terms)
 
     async def run_batch_detection(self):
         """Run batch topic detection on queued entries"""
@@ -647,6 +727,46 @@ class TopicDetectionPipeline:
 # Global pipeline instance
 topic_pipeline = TopicDetectionPipeline()
 
+# Language detection and validation utilities
+def detect_language(text: str) -> str:
+    """Simple language detection based on character analysis"""
+    if not text or not text.strip():
+        return "unknown"
+
+    # Count Chinese characters (CJK Unified Ideographs)
+    chinese_chars = sum(1 for char in text if '\u4e00' <= char <= '\u9fff')
+    total_chars = len([char for char in text if char.isalpha()])
+
+    if total_chars == 0:
+        return "unknown"
+
+    chinese_ratio = chinese_chars / total_chars
+
+    # If more than 30% Chinese characters, consider it Chinese
+    if chinese_ratio > 0.3:
+        return "chinese"
+    else:
+        return "english"
+
+def validate_language_consistency(input_text: str, output_text: str) -> bool:
+    """Validate that output maintains the same language as input"""
+    input_lang = detect_language(input_text)
+    output_lang = detect_language(output_text)
+
+    # Allow unknown language to pass through
+    if input_lang == "unknown" or output_lang == "unknown":
+        return True
+
+    return input_lang == output_lang
+
+def log_language_mismatch(function_name: str, input_text: str, output_text: str):
+    """Log when language mismatch is detected"""
+    input_lang = detect_language(input_text)
+    output_lang = detect_language(output_text)
+    print(f"⚠️ Language mismatch in {function_name}: input={input_lang}, output={output_lang}")
+    print(f"Input sample: {input_text[:100]}...")
+    print(f"Output sample: {output_text[:100]}...")
+
 # Scheduled Task Runner
 class ScheduledTaskRunner:
     def __init__(self):
@@ -778,8 +898,8 @@ def optimize_text(content: str) -> str:
             model="gpt-3.5-turbo",
             messages=[
                 {
-                    "role": "system", 
-                    "content": "You are a diary assistant. Correct any transcription errors and typos in the user's text without changing meaning. Fix grammar issues, improve flow, and preserve the content's emotion and style. Keep the corrections minimal. IMPORTANT: ALWAYS PRESERVE THE ORIGINAL LANGUAGE - DO NOT TRANSLATE CHINESE TEXT TO ENGLISH. If the text is in Chinese, keep it in Chinese."
+                    "role": "system",
+                    "content": "You are a diary assistant. Correct any transcription errors and typos in the user's text without changing meaning. Fix grammar issues, improve flow, and preserve the content's emotion and style. Keep the corrections minimal.\n\nCRITICAL LANGUAGE PRESERVATION RULES:\n1. NEVER translate content between languages\n2. If input is in Chinese, output MUST be in Chinese\n3. If input is in English, output MUST be in English\n4. If input is mixed languages, preserve the exact language distribution\n5. Do not change Chinese characters to English words or vice versa\n6. Maintain original language structure and expressions\n7. Only fix obvious typos and grammar within the same language"
                 },
                 {
                     "role": "user",
@@ -791,6 +911,13 @@ def optimize_text(content: str) -> str:
         )
         
         optimized = response.choices[0].message.content
+
+        # Validate language consistency
+        if not validate_language_consistency(content, optimized):
+            log_language_mismatch("optimize_text", content, optimized)
+            print("⚠️ Language mismatch detected, returning original content")
+            return content
+
         print(f"Text optimized successfully")
         return optimized
     except Exception as e:
@@ -891,13 +1018,21 @@ CATEGORIES (NOUNS ONLY):
 - "technologies": Tools, software, programming languages, platforms (NOUNS)
 - "animals": Pets, animals mentioned in diary (NOUNS)
 
-IMPORTANT RULES:
+CRITICAL LANGUAGE PRESERVATION RULES:
+1. NEVER translate any content - preserve exact original language
+2. If diary entry is in Chinese, ALL extracted topics/names MUST be in Chinese
+3. If diary entry is in English, ALL extracted topics/names MUST be in English
+4. If diary entry is mixed languages, preserve the exact language for each extracted element
+5. Do not convert Chinese names to English or vice versa
+6. Maintain original language expressions and terminology
+
+TOPIC EXTRACTION RULES:
 1. TOPICS MUST BE NOUNS ONLY - no verbs, no actions, no activities
 2. Actions/verbs become RELATIONS between topics and people
-3. Extract topics in the original language (Chinese/English)
+3. Extract topics in their exact original language (Chinese/English)
 4. Person names should be individual entities, not groups
 5. Break down complex topics into atomic noun components
-6. Use consistent naming conventions
+6. Use consistent naming conventions within the same language
 7. Add keywords to help with similarity detection
 8. Create relations for actions that connect nouns (verbs like: develops, learns, visits, manages)"""
                 },
@@ -1115,7 +1250,7 @@ def calculate_topic_similarity(topic1, topic2):
     name2_clean = re.sub(r'[^\w\u4e00-\u9fff]', '', name2_norm)
 
     if name1_clean == name2_clean:
-        return 0.95
+        return 1.0  # Changed from 0.95 to 1.0 for exact matches after cleaning
 
     # For people, be more strict about name matching
     if (topic1.get("type") == "person" and topic2.get("type") == "person") or \
@@ -1216,12 +1351,12 @@ def merge_similar_topics(topics):
 
             similarity = calculate_topic_similarity(topic, other_topic)
 
-            # Use different thresholds based on topic type
-            merge_threshold = 0.85  # Default threshold
+            # Use different thresholds based on topic type - made more aggressive
+            merge_threshold = 0.7  # Lowered from 0.85 to catch more duplicates
             if topic.get("type") == "person" or topic.get("category") == "people":
-                merge_threshold = 0.9  # Higher threshold for people (be more careful)
+                merge_threshold = 0.8  # Lowered from 0.9 for people
             elif topic.get("category") in ["technologies", "skills"]:
-                merge_threshold = 0.8  # Slightly lower for tech/skills
+                merge_threshold = 0.7  # Lowered from 0.8 for tech/skills
 
             if similarity >= merge_threshold:
                 similar_topics.append(other_topic)
@@ -1525,7 +1660,13 @@ Guidelines:
 - Never add timestamps or date markers
 - Format lists as bullet points when the content resembles a list or collection of items
 - Apply consistent indentation for hierarchical lists if needed
-- IMPORTANT: PRESERVE THE ORIGINAL LANGUAGE. If content is in Chinese, keep it in Chinese - do not translate.
+- CRITICAL LANGUAGE PRESERVATION:
+  * NEVER translate between languages
+  * If existing content is in Chinese, keep ALL content in Chinese
+  * If existing content is in English, keep ALL content in English
+  * If content is mixed languages, preserve the exact language distribution
+  * Do not convert Chinese characters to English words or vice versa
+  * Maintain original language expressions and sentence structures
 """
                 },
                 {
@@ -1535,7 +1676,15 @@ Guidelines:
             ],
             temperature=0.3  # Lower temperature for more consistent results
         )
-        return response.choices[0].message.content
+        integrated_content = response.choices[0].message.content
+
+        # Validate language consistency with existing content
+        if not validate_language_consistency(existing_content, integrated_content):
+            log_language_mismatch("integrate_diary_content", existing_content, integrated_content)
+            print("⚠️ Language mismatch detected in content integration, using simple concatenation")
+            return f"{existing_content}\n\n{new_content}"
+
+        return integrated_content
     except Exception as e:
         print(f"Content integration failed: {e}")
         # Fallback to simple concatenation
@@ -1651,14 +1800,26 @@ async def create_entry(entry: EntryCreate):
                 # If there's an error reading the graph file, we should extract
                 should_extract = USE_AI_FOR_TOPICS
             
-        # Add entry to topic detection pipeline instead of immediate extraction
+        # Add entry to topic detection pipeline with smart priority detection
         if should_extract:
             print("Adding entry to topic detection pipeline...")
-            topic_pipeline.add_to_queue(new_entry['id'], optimized_content, priority='normal')
 
-            # Trigger batch detection if conditions are met
-            if topic_pipeline.should_run_detection():
-                # Run detection in background thread to avoid blocking response
+            # Check if content has potential new topics to determine priority
+            has_new_topics = topic_pipeline.has_potential_new_topics(optimized_content)
+            priority = 'immediate' if has_new_topics else 'normal'
+
+            print(f"Content analysis: potential new topics = {has_new_topics}, priority = {priority}")
+            should_run_immediate = topic_pipeline.add_to_queue(new_entry['id'], optimized_content, priority=priority)
+
+            # Run immediate detection for entries with potential new topics
+            if should_run_immediate and has_new_topics:
+                print("Running immediate topic detection for entry with potential new topics...")
+                # Run immediate detection in background thread
+                threading.Thread(target=lambda: asyncio.run(topic_pipeline.run_immediate_detection(new_entry['id'], optimized_content))).start()
+
+            # Also trigger batch detection if conditions are met for other queued entries
+            elif topic_pipeline.should_run_detection():
+                # Run batch detection in background thread to avoid blocking response
                 threading.Thread(target=lambda: asyncio.run(topic_pipeline.run_batch_detection())).start()
         else:
             print("Skipping topic extraction (AI usage disabled)")
@@ -1766,14 +1927,20 @@ async def update_entry(id: int, entry_update: EntryUpdate):
             # If there's an error reading the graph file, we should extract
             should_extract = USE_AI_FOR_TOPICS
         
-    # Add updated entry to topic detection pipeline
+    # Add updated entry to topic detection pipeline with immediate detection
     if should_extract:
         print("Adding updated entry to topic detection pipeline...")
-        topic_pipeline.add_to_queue(id, final_content, priority='high')
+        should_run_immediate = topic_pipeline.add_to_queue(id, final_content, priority='high')
 
-        # Trigger batch detection if conditions are met
-        if topic_pipeline.should_run_detection():
-            # Run detection in background thread to avoid blocking response
+        # Run immediate detection for updated entries since they're high priority
+        if should_run_immediate:
+            print("Running immediate topic detection for updated entry...")
+            # Run immediate detection in background thread
+            threading.Thread(target=lambda: asyncio.run(topic_pipeline.run_immediate_detection(id, final_content))).start()
+
+        # Also trigger batch detection if conditions are met for other queued entries
+        elif topic_pipeline.should_run_detection():
+            # Run batch detection in background thread to avoid blocking response
             threading.Thread(target=lambda: asyncio.run(topic_pipeline.run_batch_detection())).start()
     else:
         print("Skipping topic extraction (AI usage disabled)")
@@ -1902,8 +2069,15 @@ def analyze_topic_threads(entries):
       ]
     }
     
-    IMPORTANT:
-    - Respond in the SAME LANGUAGE as the diary entries (Chinese if entries are in Chinese)
+    CRITICAL LANGUAGE PRESERVATION RULES:
+    - NEVER translate content between languages
+    - If diary entries are in Chinese, ALL responses MUST be in Chinese
+    - If diary entries are in English, ALL responses MUST be in English
+    - If entries are mixed languages, preserve the exact language for each element
+    - Maintain original language expressions and terminology
+    - Do not convert Chinese characters to English words or vice versa
+
+    ANALYSIS REQUIREMENTS:
     - Only include topics that appear in multiple entries or are significant
     - Focus on quality over quantity - identify the most meaningful recurring themes
     - For excerpts, include the most relevant sentences and highlight key phrases
@@ -2002,6 +2176,8 @@ async def deduplicate_topics_endpoint():
         topics = [node for node in graph_data.get("nodes", []) if node.get("type") == "topic"]
         people = [node for node in graph_data.get("nodes", []) if node.get("type") == "person"]
 
+        print(f"🔍 Starting deduplication: {len(topics)} topics, {len(people)} people")
+
         # Merge similar topics
         merged_topics = merge_similar_topics(topics)
 
@@ -2092,6 +2268,673 @@ async def deduplicate_topics_endpoint():
     except Exception as e:
         print(f"Error deduplicating topics: {str(e)}")
         return {"status": "error", "message": f"Failed to deduplicate topics: {str(e)}"}
+
+@app.post("/api/aggressive-deduplicate")
+async def aggressive_deduplicate_topics():
+    """
+    Aggressive deduplication that catches exact name matches regardless of ID
+    Works on both graph and topics files separately, then combines
+    """
+    try:
+        # Load both files separately
+        # 1. Load graph file
+        with open(graph_path, "r", encoding="utf-8") as f:
+            graph_data = json.load(f)
+        graph_nodes = graph_data.get("nodes", [])
+
+        # 2. Load topics file
+        with open(topics_path, "r", encoding="utf-8") as f:
+            topics_data = json.load(f)
+        topics_items = topics_data.get("topics", []) + topics_data.get("people", [])
+
+        print(f"🔍 Starting aggressive deduplication:")
+        print(f"  - Graph file: {len(graph_nodes)} nodes")
+        print(f"  - Topics file: {len(topics_items)} items")
+
+        # Combine all items for deduplication
+        all_items = []
+
+        # Add graph nodes (convert to standard format)
+        for node in graph_nodes:
+            all_items.append({
+                "id": node["id"],
+                "name": node["name"],
+                "type": node["type"],
+                "category": node.get("category", "activities"),
+                "importance": node.get("importance", 3),
+                "sentiment": node.get("sentiment", 0),
+                "context": node.get("context", ""),
+                "keywords": node.get("keywords", []),
+                "role": node.get("role", "") if node["type"] == "person" else "",
+                "source": "graph"
+            })
+
+        # Add topics file items
+        for item in topics_items:
+            all_items.append({
+                "id": item["id"],
+                "name": item["name"],
+                "type": item.get("type", "topic"),
+                "category": item.get("category", "activities"),
+                "importance": item.get("importance", 3),
+                "sentiment": item.get("sentiment", 0),
+                "context": item.get("context", ""),
+                "keywords": item.get("keywords", []),
+                "role": item.get("role", "") if item.get("type") == "person" else "",
+                "source": "topics"
+            })
+
+        print(f"  - Combined total: {len(all_items)} items")
+
+        # Group items by exact name (case-insensitive)
+        name_groups = {}
+        for item in all_items:
+            name = item.get("name", "").strip().lower()
+            if name:
+                if name not in name_groups:
+                    name_groups[name] = []
+                name_groups[name].append(item)
+
+        # Find duplicates and merge them
+        final_items = []
+        id_mapping = {}  # old_id -> new_id
+
+        for name, item_group in name_groups.items():
+            if len(item_group) == 1:
+                # No duplicates, keep as is
+                final_items.append(item_group[0])
+                id_mapping[item_group[0]["id"]] = item_group[0]["id"]
+            else:
+                # Multiple items with same name - merge them
+                print(f"🔗 Merging {len(item_group)} duplicates of '{name}':")
+                for item in item_group:
+                    print(f"  - ID: {item['id']}, Type: {item.get('type', 'unknown')}, Source: {item.get('source', 'unknown')}")
+
+                # Choose the best item as primary (prefer graph source, then longer/more detailed names)
+                primary_item = max(item_group, key=lambda t: (
+                    1 if t.get("source") == "graph" else 0,  # Prefer graph source
+                    len(t.get("name", "")),  # Prefer longer names
+                    len(t.get("keywords", [])),  # Prefer more keywords
+                    t.get("importance", 0)  # Prefer higher importance
+                ))
+
+                # Merge keywords from all items
+                all_keywords = set()
+                for item in item_group:
+                    all_keywords.update(item.get("keywords", []))
+
+                # Update primary item with merged data
+                primary_item["keywords"] = list(all_keywords)
+
+                # Average importance if available
+                importances = [t.get("importance", 3) for t in item_group if t.get("importance")]
+                if importances:
+                    primary_item["importance"] = round(sum(importances) / len(importances))
+
+                final_items.append(primary_item)
+
+                # Map all old IDs to the primary ID
+                for item in item_group:
+                    id_mapping[item["id"]] = primary_item["id"]
+
+        # Now rebuild both files with the deduplicated data
+        # Separate topics and people
+        final_topics_only = [t for t in final_items if t.get("type") == "topic"]
+        final_people_only = [t for t in final_items if t.get("type") == "person"]
+
+        # Load current graph to get edges
+        try:
+            with open(graph_path, "r", encoding="utf-8") as f:
+                graph_data = json.load(f)
+            edges = graph_data.get("edges", [])
+        except:
+            edges = []
+
+        # Update edges with new IDs
+        updated_edges = []
+        for edge in edges:
+            source_id = id_mapping.get(edge["source"], edge["source"])
+            target_id = id_mapping.get(edge["target"], edge["target"])
+
+            # Only keep edge if both nodes still exist
+            existing_ids = {t["id"] for t in final_items}
+            if source_id in existing_ids and target_id in existing_ids:
+                updated_edge = edge.copy()
+                updated_edge["source"] = source_id
+                updated_edge["target"] = target_id
+                updated_edges.append(updated_edge)
+
+        # Remove duplicate edges
+        seen_edges = set()
+        final_edges = []
+        for edge in updated_edges:
+            edge_key = f"{edge['source']}-{edge['target']}-{edge.get('type', '')}"
+            if edge_key not in seen_edges:
+                seen_edges.add(edge_key)
+                final_edges.append(edge)
+
+        # Convert items to graph node format
+        graph_nodes = []
+        for item in final_items:
+            graph_node = {
+                "id": item["id"],
+                "name": item["name"],
+                "type": item["type"],
+                "category": item.get("category", "activities"),
+                "importance": item.get("importance", 3),
+                "sentiment": item.get("sentiment", 0),
+                "context": item.get("context", ""),
+                "keywords": item.get("keywords", [])
+            }
+            if item["type"] == "person":
+                graph_node["role"] = item.get("role", "")
+            graph_nodes.append(graph_node)
+
+        # Update and save graph data
+        graph_data = {
+            "nodes": graph_nodes,
+            "edges": final_edges
+        }
+        with open(graph_path, "w", encoding="utf-8") as f:
+            json.dump(graph_data, f, ensure_ascii=False, indent=2)
+
+        # Update topics.json file with deduplicated data
+        topics_data = {
+            "topics": [
+                {
+                    "id": topic["id"],
+                    "name": topic["name"],
+                    "type": topic.get("type", "concept") if topic.get("type") != "person" else "concept",
+                    "category": topic.get("category", "activities"),
+                    "importance": topic.get("importance", 3),
+                    "sentiment": topic.get("sentiment", 0),
+                    "context": topic.get("context", ""),
+                    "keywords": topic.get("keywords", [])
+                }
+                for topic in final_topics_only
+            ],
+            "people": [
+                {
+                    "id": person["id"],
+                    "name": person["name"],
+                    "category": "people",
+                    "role": person.get("role", ""),
+                    "importance": person.get("importance", 3),
+                    "aliases": person.get("aliases", [])
+                }
+                for person in final_people_only
+            ],
+            "relations": []  # Relations are stored in graph edges
+        }
+
+        # Save updated topics.json
+        with open(topics_path, "w", encoding="utf-8") as f:
+            json.dump(topics_data, f, ensure_ascii=False, indent=2)
+
+        duplicates_removed = len(all_items) - len(final_items)
+        print(f"✅ Aggressive deduplication complete: removed {duplicates_removed} duplicates")
+        print(f"📁 Updated both graph and topics files")
+
+        return {
+            "status": "success",
+            "message": f"Aggressive deduplication complete",
+            "original_items": len(all_items),
+            "final_items": len(final_items),
+            "duplicates_removed": duplicates_removed,
+            "edges_updated": len(final_edges)
+        }
+
+    except Exception as e:
+        print(f"Error in aggressive deduplication: {str(e)}")
+        return {"status": "error", "message": f"Failed to deduplicate: {str(e)}"}
+
+@app.post("/api/llm-semantic-deduplicate")
+async def llm_semantic_deduplicate():
+    """
+    Use LLM to identify semantic duplicates that exact matching can't catch
+    """
+    try:
+        # Get all current topics
+        all_topics = get_all_available_topics()
+
+        print(f"🤖 Starting LLM semantic deduplication on {len(all_topics)} topics")
+
+        # Group topics by category for more efficient processing
+        categories = {}
+        for topic in all_topics:
+            category = topic.get("category", "unknown")
+            if category not in categories:
+                categories[category] = []
+            categories[category].append(topic)
+
+        print(f"📊 Topics grouped into {len(categories)} categories:")
+        for cat, topics in categories.items():
+            print(f"  - {cat}: {len(topics)} topics")
+
+        # Process each category separately to find semantic duplicates
+        all_duplicates = []
+
+        for category, topics in categories.items():
+            if len(topics) < 2:
+                continue
+
+            print(f"\n🔍 Analyzing category '{category}' with {len(topics)} topics...")
+
+            # Create topic list for LLM analysis
+            topic_list = []
+            for i, topic in enumerate(topics):
+                topic_info = f"{i}: {topic['name']}"
+                if topic.get('keywords'):
+                    topic_info += f" (keywords: {', '.join(topic['keywords'][:3])})"
+                topic_list.append(topic_info)
+
+            # Prepare LLM prompt
+            prompt = f"""Analyze these {category} topics and identify semantic duplicates - topics that refer to the same concept, person, or thing despite having different names.
+
+Topics to analyze:
+{chr(10).join(topic_list)}
+
+Consider these types of duplicates:
+1. Same concept in different languages (e.g., "小倩" and "Xiao Qian" for the same person)
+2. Abbreviations vs full names (e.g., "UI" and "UI/UX")
+3. Different phrasing for same concept (e.g., "AI口语工具" and "AI口语项目")
+4. Synonyms or very similar concepts
+5. Projects vs tools that are essentially the same thing
+
+Return ONLY a JSON array of duplicate groups. Each group should contain the indices of topics that are duplicates of each other.
+Format: [[0,1], [3,5,7], [9,10]]
+
+If no duplicates are found, return: []
+
+Do not include explanations, only the JSON array."""
+
+            try:
+                # Check if OpenAI client is available
+                if client is None:
+                    print(f"⚠️  OpenAI client not available for {category}")
+                    continue
+
+                # Call OpenAI API
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": "You are an expert at identifying semantic duplicates in topic lists. You understand multiple languages and can identify when different names refer to the same concept, person, or entity."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.1,
+                    max_tokens=1000
+                )
+
+                llm_response = response.choices[0].message.content.strip()
+                print(f"🤖 LLM response for {category}: {llm_response}")
+
+                # Parse LLM response
+                import json
+                import re
+                try:
+                    # Clean up the response - remove markdown code blocks if present
+                    cleaned_response = llm_response.strip()
+                    if cleaned_response.startswith('```json'):
+                        cleaned_response = cleaned_response[7:]  # Remove ```json
+                    if cleaned_response.endswith('```'):
+                        cleaned_response = cleaned_response[:-3]  # Remove ```
+                    cleaned_response = cleaned_response.strip()
+
+                    duplicate_groups = json.loads(cleaned_response)
+                    if duplicate_groups:
+                        print(f"✅ Found {len(duplicate_groups)} duplicate groups in {category}")
+                        for group_indices in duplicate_groups:
+                            group_topics = [topics[i] for i in group_indices if i < len(topics)]
+                            if len(group_topics) > 1:
+                                all_duplicates.append(group_topics)
+                                print(f"  - Group: {[t['name'] for t in group_topics]}")
+                    else:
+                        print(f"ℹ️  No duplicates found in {category}")
+
+                except json.JSONDecodeError as e:
+                    print(f"⚠️  Failed to parse LLM response for {category}: {e}")
+                    print(f"⚠️  Raw response: {repr(llm_response)}")
+                    continue
+
+            except Exception as e:
+                print(f"⚠️  LLM API error for {category}: {e}")
+                continue
+
+        if not all_duplicates:
+            print("✅ No semantic duplicates found by LLM")
+            return {
+                "status": "success",
+                "message": "No semantic duplicates found",
+                "duplicates_found": 0,
+                "duplicates_removed": 0
+            }
+
+        print(f"\n🔗 Processing {len(all_duplicates)} duplicate groups found by LLM...")
+
+        # Process duplicates similar to aggressive deduplication
+        final_topics = []
+        removed_ids = set()
+        id_mapping = {}
+
+        # Add all non-duplicate topics first
+        for topic in all_topics:
+            is_duplicate = False
+            for group in all_duplicates:
+                if any(t['id'] == topic['id'] for t in group):
+                    is_duplicate = True
+                    break
+            if not is_duplicate:
+                final_topics.append(topic)
+                id_mapping[topic['id']] = topic['id']
+
+        # Process each duplicate group
+        for group in all_duplicates:
+            print(f"🔗 Merging semantic duplicates: {[t['name'] for t in group]}")
+
+            # Choose the best topic as primary
+            primary_topic = max(group, key=lambda t: (
+                len(t.get("name", "")),  # Prefer longer names
+                len(t.get("keywords", [])),  # Prefer more keywords
+                t.get("importance", 0),  # Prefer higher importance
+                1 if t.get("type") == "person" else 0  # Prefer person type for people
+            ))
+
+            # Merge keywords from all topics in group
+            all_keywords = set()
+            for topic in group:
+                all_keywords.update(topic.get("keywords", []))
+
+            # Update primary topic with merged data
+            primary_topic["keywords"] = list(all_keywords)
+
+            # Average importance if available
+            importances = [t.get("importance", 3) for t in group if t.get("importance")]
+            if importances:
+                primary_topic["importance"] = round(sum(importances) / len(importances))
+
+            final_topics.append(primary_topic)
+
+            # Map all old IDs to the primary ID
+            for topic in group:
+                id_mapping[topic["id"]] = primary_topic["id"]
+                if topic["id"] != primary_topic["id"]:
+                    removed_ids.add(topic["id"])
+
+        # Update both graph and topics files
+        # Load current graph to get edges
+        try:
+            with open(graph_path, "r", encoding="utf-8") as f:
+                graph_data = json.load(f)
+            edges = graph_data.get("edges", [])
+        except:
+            edges = []
+
+        # Update edges with new IDs
+        updated_edges = []
+        for edge in edges:
+            source_id = id_mapping.get(edge["source"], edge["source"])
+            target_id = id_mapping.get(edge["target"], edge["target"])
+
+            # Only keep edge if both nodes still exist
+            existing_ids = {t["id"] for t in final_topics}
+            if source_id in existing_ids and target_id in existing_ids:
+                updated_edge = edge.copy()
+                updated_edge["source"] = source_id
+                updated_edge["target"] = target_id
+                updated_edges.append(updated_edge)
+
+        # Remove duplicate edges
+        seen_edges = set()
+        final_edges = []
+        for edge in updated_edges:
+            edge_key = f"{edge['source']}-{edge['target']}-{edge.get('type', '')}"
+            if edge_key not in seen_edges:
+                seen_edges.add(edge_key)
+                final_edges.append(edge)
+
+        # Separate topics and people for file updates
+        final_topics_only = [t for t in final_topics if t.get("type") == "topic"]
+        final_people_only = [t for t in final_topics if t.get("type") == "person"]
+
+        # Convert to graph node format
+        graph_nodes = []
+        for item in final_topics:
+            graph_node = {
+                "id": item["id"],
+                "name": item["name"],
+                "type": item["type"],
+                "category": item.get("category", "activities"),
+                "importance": item.get("importance", 3),
+                "sentiment": item.get("sentiment", 0),
+                "context": item.get("context", ""),
+                "keywords": item.get("keywords", [])
+            }
+            if item["type"] == "person":
+                graph_node["role"] = item.get("role", "")
+            graph_nodes.append(graph_node)
+
+        # Update and save graph data
+        graph_data = {
+            "nodes": graph_nodes,
+            "edges": final_edges
+        }
+        with open(graph_path, "w", encoding="utf-8") as f:
+            json.dump(graph_data, f, ensure_ascii=False, indent=2)
+
+        # Update topics.json file
+        topics_data = {
+            "topics": [
+                {
+                    "id": topic["id"],
+                    "name": topic["name"],
+                    "type": topic.get("type", "concept") if topic.get("type") != "person" else "concept",
+                    "category": topic.get("category", "activities"),
+                    "importance": topic.get("importance", 3),
+                    "sentiment": topic.get("sentiment", 0),
+                    "context": topic.get("context", ""),
+                    "keywords": topic.get("keywords", [])
+                }
+                for topic in final_topics_only
+            ],
+            "people": [
+                {
+                    "id": person["id"],
+                    "name": person["name"],
+                    "category": "people",
+                    "role": person.get("role", ""),
+                    "importance": person.get("importance", 3),
+                    "aliases": person.get("aliases", [])
+                }
+                for person in final_people_only
+            ],
+            "relations": []
+        }
+
+        with open(topics_path, "w", encoding="utf-8") as f:
+            json.dump(topics_data, f, ensure_ascii=False, indent=2)
+
+        duplicates_removed = len(removed_ids)
+        print(f"✅ LLM semantic deduplication complete: removed {duplicates_removed} semantic duplicates")
+        print(f"📁 Updated both graph and topics files")
+
+        return {
+            "status": "success",
+            "message": f"LLM semantic deduplication complete",
+            "original_topics": len(all_topics),
+            "final_topics": len(final_topics),
+            "duplicates_found": len(all_duplicates),
+            "duplicates_removed": duplicates_removed,
+            "edges_updated": len(final_edges)
+        }
+
+    except Exception as e:
+        print(f"Error in LLM semantic deduplication: {str(e)}")
+        return {"status": "error", "message": f"Failed to perform LLM deduplication: {str(e)}"}
+
+@app.post("/api/manual-final-deduplicate")
+async def manual_final_deduplicate():
+    """
+    Manual deduplication for specific remaining cases that LLM missed
+    """
+    try:
+        # Get all current topics
+        all_topics = get_all_available_topics()
+
+        print(f"🔧 Starting manual final deduplication on {len(all_topics)} topics")
+
+        # Define specific manual duplicates to merge
+        manual_duplicates = [
+            # AI Speaking tools - project vs tool are the same thing
+            {
+                "primary_id": "ai_speaking_tutor_backend",  # Keep the tool version
+                "duplicate_ids": ["24"],  # Remove the project version
+                "reason": "AI口语工具 and AI口语项目 are the same concept"
+            },
+            # Xiao Qian - Chinese vs English name for same person
+            {
+                "primary_id": "person_小倩_10a5d3",  # Keep Chinese name
+                "duplicate_ids": ["27"],  # Remove English name
+                "reason": "小倩 and Xiao Qian are the same person"
+            }
+        ]
+
+        # Process manual duplicates
+        final_topics = []
+        removed_ids = set()
+        id_mapping = {}
+
+        # Add all non-duplicate topics first
+        for topic in all_topics:
+            is_duplicate = False
+            for dup_group in manual_duplicates:
+                if topic['id'] in dup_group['duplicate_ids']:
+                    is_duplicate = True
+                    removed_ids.add(topic['id'])
+                    id_mapping[topic['id']] = dup_group['primary_id']
+                    print(f"🗑️  Removing duplicate: {topic['name']} (ID: {topic['id']}) - {dup_group['reason']}")
+                    break
+
+            if not is_duplicate:
+                final_topics.append(topic)
+                id_mapping[topic['id']] = topic['id']
+
+        if not removed_ids:
+            print("ℹ️  No manual duplicates found to remove")
+            return {
+                "status": "success",
+                "message": "No manual duplicates found",
+                "duplicates_removed": 0
+            }
+
+        # Update both graph and topics files
+        # Load current graph to get edges
+        try:
+            with open(graph_path, "r", encoding="utf-8") as f:
+                graph_data = json.load(f)
+            edges = graph_data.get("edges", [])
+        except:
+            edges = []
+
+        # Update edges with new IDs
+        updated_edges = []
+        for edge in edges:
+            source_id = id_mapping.get(edge["source"], edge["source"])
+            target_id = id_mapping.get(edge["target"], edge["target"])
+
+            # Only keep edge if both nodes still exist
+            existing_ids = {t["id"] for t in final_topics}
+            if source_id in existing_ids and target_id in existing_ids:
+                updated_edge = edge.copy()
+                updated_edge["source"] = source_id
+                updated_edge["target"] = target_id
+                updated_edges.append(updated_edge)
+
+        # Remove duplicate edges
+        seen_edges = set()
+        final_edges = []
+        for edge in updated_edges:
+            edge_key = f"{edge['source']}-{edge['target']}-{edge.get('type', '')}"
+            if edge_key not in seen_edges:
+                seen_edges.add(edge_key)
+                final_edges.append(edge)
+
+        # Separate topics and people for file updates
+        final_topics_only = [t for t in final_topics if t.get("type") == "topic"]
+        final_people_only = [t for t in final_topics if t.get("type") == "person"]
+
+        # Convert to graph node format
+        graph_nodes = []
+        for item in final_topics:
+            graph_node = {
+                "id": item["id"],
+                "name": item["name"],
+                "type": item["type"],
+                "category": item.get("category", "activities"),
+                "importance": item.get("importance", 3),
+                "sentiment": item.get("sentiment", 0),
+                "context": item.get("context", ""),
+                "keywords": item.get("keywords", [])
+            }
+            if item["type"] == "person":
+                graph_node["role"] = item.get("role", "")
+            graph_nodes.append(graph_node)
+
+        # Update and save graph data
+        graph_data = {
+            "nodes": graph_nodes,
+            "edges": final_edges
+        }
+        with open(graph_path, "w", encoding="utf-8") as f:
+            json.dump(graph_data, f, ensure_ascii=False, indent=2)
+
+        # Update topics.json file
+        topics_data = {
+            "topics": [
+                {
+                    "id": topic["id"],
+                    "name": topic["name"],
+                    "type": topic.get("type", "concept") if topic.get("type") != "person" else "concept",
+                    "category": topic.get("category", "activities"),
+                    "importance": topic.get("importance", 3),
+                    "sentiment": topic.get("sentiment", 0),
+                    "context": topic.get("context", ""),
+                    "keywords": topic.get("keywords", [])
+                }
+                for topic in final_topics_only
+            ],
+            "people": [
+                {
+                    "id": person["id"],
+                    "name": person["name"],
+                    "category": "people",
+                    "role": person.get("role", ""),
+                    "importance": person.get("importance", 3),
+                    "aliases": person.get("aliases", [])
+                }
+                for person in final_people_only
+            ],
+            "relations": []
+        }
+
+        with open(topics_path, "w", encoding="utf-8") as f:
+            json.dump(topics_data, f, ensure_ascii=False, indent=2)
+
+        duplicates_removed = len(removed_ids)
+        print(f"✅ Manual final deduplication complete: removed {duplicates_removed} remaining duplicates")
+        print(f"📁 Updated both graph and topics files")
+
+        return {
+            "status": "success",
+            "message": f"Manual final deduplication complete",
+            "original_topics": len(all_topics),
+            "final_topics": len(final_topics),
+            "duplicates_removed": duplicates_removed,
+            "edges_updated": len(final_edges)
+        }
+
+    except Exception as e:
+        print(f"Error in manual final deduplication: {str(e)}")
+        return {"status": "error", "message": f"Failed to perform manual deduplication: {str(e)}"}
 
 @app.post("/api/apply-consolidated-topics")
 async def apply_consolidated_topics(consolidated_data: dict):
@@ -2698,6 +3541,86 @@ async def delete_custom_topic(topic_id: str):
             raise HTTPException(status_code=500, detail="Failed to delete custom topic")
     except Exception as e:
         print(f"Error deleting custom topic: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/topics/{topic_id}")
+async def delete_topic(topic_id: str):
+    """Delete any topic (custom, extracted, or AI-generated)"""
+    try:
+        print(f"🗑️ Attempting to delete topic: {topic_id}")
+
+        # Remove from topic configuration
+        config = load_topic_config()
+
+        # Remove from custom topics if it exists there
+        custom_topics = config.get('custom_topics', [])
+        config['custom_topics'] = [t for t in custom_topics if t.get('id') != topic_id]
+
+        # Remove from visible/hidden lists
+        if 'visible_topics' in config:
+            config['visible_topics'] = [t for t in config['visible_topics'] if t != topic_id]
+        if 'hidden_topics' in config:
+            config['hidden_topics'] = [t for t in config['hidden_topics'] if t != topic_id]
+
+        # Remove from priorities
+        if topic_id in config.get('topic_priorities', {}):
+            del config['topic_priorities'][topic_id]
+
+        # Remove from topic graph (graph.json)
+        try:
+            with open(graph_path, 'r', encoding='utf-8') as f:
+                graph_data = json.load(f)
+
+            # Remove the topic node
+            original_nodes = len(graph_data.get('nodes', []))
+            graph_data['nodes'] = [node for node in graph_data.get('nodes', []) if node.get('id') != topic_id]
+
+            # Remove edges connected to this topic
+            original_edges = len(graph_data.get('edges', []))
+            graph_data['edges'] = [edge for edge in graph_data.get('edges', [])
+                                 if edge.get('source') != topic_id and edge.get('target') != topic_id]
+
+            # Save updated graph
+            with open(graph_path, 'w', encoding='utf-8') as f:
+                json.dump(graph_data, f, ensure_ascii=False, indent=2)
+
+            print(f"Removed from graph: {original_nodes - len(graph_data['nodes'])} nodes, {original_edges - len(graph_data['edges'])} edges")
+
+        except Exception as e:
+            print(f"Warning: Could not update graph file: {e}")
+
+        # Remove from topics file (topics.json)
+        try:
+            with open(topics_path, 'r', encoding='utf-8') as f:
+                topics_data = json.load(f)
+
+            # Remove from topics list
+            original_topics = len(topics_data.get('topics', []))
+            topics_data['topics'] = [topic for topic in topics_data.get('topics', []) if topic.get('id') != topic_id]
+
+            # Remove from people list (in case it was misclassified)
+            original_people = len(topics_data.get('people', []))
+            topics_data['people'] = [person for person in topics_data.get('people', []) if person.get('id') != topic_id]
+
+            # Save updated topics
+            with open(topics_path, 'w', encoding='utf-8') as f:
+                json.dump(topics_data, f, ensure_ascii=False, indent=2)
+
+            print(f"Removed from topics file: {original_topics - len(topics_data['topics'])} topics, {original_people - len(topics_data['people'])} people")
+
+        except Exception as e:
+            print(f"Warning: Could not update topics file: {e}")
+
+        # Save configuration
+        success = save_topic_config(config)
+        if success:
+            print(f"✅ Successfully deleted topic: {topic_id}")
+            return {"status": "success", "message": "Topic deleted successfully"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save configuration after deletion")
+
+    except Exception as e:
+        print(f"❌ Error deleting topic {topic_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/topic-suggestions")
