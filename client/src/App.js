@@ -32,18 +32,21 @@ function App() {
   const [themeSortNewestFirst, setThemeSortNewestFirst] = useState(true);
   // Add state for topic management modal
   const [showTopicManager, setShowTopicManager] = useState(false);
-  
+  // Add state for mood tracking
+  const [selectedMoods, setSelectedMoods] = useState([]);
+  const [editMoods, setEditMoods] = useState([]);
+
   // No static themes - all topics should come from actual diary entries
 
   const fetchEntries = async () => {
     try {
       console.log('Fetching entries...');
       let data = [];
-      
+
       try {
         // First try the API endpoint
         const response = await fetch('http://localhost:3001/api/entries');
-        
+
         if (response.ok) {
           data = await response.json();
           console.log('Entries fetched from API:', data.length);
@@ -58,7 +61,7 @@ function App() {
         data = window.entriesData || [];
         console.log('Using local entries:', data.length);
       }
-      
+
       setEntries(data);
     } catch (error) {
       console.error('Failed to fetch entries:', error);
@@ -98,6 +101,38 @@ function App() {
     setSelectedDate(date);
   };
 
+  // Mood options
+  const moodOptions = [
+    { emoji: '😊', label: '开心', value: 'happy' },
+    { emoji: '😌', label: '放松', value: 'relaxed' },
+    { emoji: '😴', label: '疲惫', value: 'tired' },
+    { emoji: '😰', label: '焦虑', value: 'anxious' },
+    { emoji: '😢', label: '难过', value: 'sad' },
+    { emoji: '😡', label: '生气', value: 'angry' },
+    { emoji: '🤔', label: '思考', value: 'thoughtful' },
+    { emoji: '😎', label: '自信', value: 'confident' }
+  ];
+
+  const handleMoodToggle = (moodValue) => {
+    setSelectedMoods(prev => {
+      if (prev.includes(moodValue)) {
+        return prev.filter(m => m !== moodValue);
+      } else {
+        return [...prev, moodValue];
+      }
+    });
+  };
+
+  const handleEditMoodToggle = (moodValue) => {
+    setEditMoods(prev => {
+      if (prev.includes(moodValue)) {
+        return prev.filter(m => m !== moodValue);
+      } else {
+        return [...prev, moodValue];
+      }
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!content.trim()) return;
@@ -107,7 +142,7 @@ function App() {
       if (filteredEntries.length > 0) {
         // Get the most recent entry for this date
         const latestEntry = filteredEntries[filteredEntries.length - 1];
-        
+
         try {
           // First try the API endpoint
           const response = await fetch(`http://localhost:3001/api/entries/${latestEntry.id}`, {
@@ -137,16 +172,16 @@ function App() {
             content: latestEntry.content + '\n\n' + content,
             updatedAt: new Date().toISOString()
           };
-          
+
           // Update the entry in the local array
-          const updatedEntries = entries.map(entry => 
+          const updatedEntries = entries.map(entry =>
             entry.id === latestEntry.id ? updatedEntry : entry
           );
-          
+
           // Save to local storage
           localStorage.setItem('diaryEntries', JSON.stringify(updatedEntries));
           window.entriesData = updatedEntries;
-          
+
           // Update state
           setEntries(updatedEntries);
           setContent('');
@@ -162,12 +197,14 @@ function App() {
             body: JSON.stringify({
               content: content,
               type: 'text',
-              targetDate: selectedDate.toISOString()
+              targetDate: selectedDate.toISOString(),
+              moods: selectedMoods
             }),
           });
 
           if (response.ok) {
             setContent('');
+            setSelectedMoods([]);
             fetchEntries();
           } else {
             throw new Error('API not available');
@@ -175,25 +212,27 @@ function App() {
         } catch (apiError) {
           // Handle locally if API is not available
           console.log('API not available, saving locally');
-          
+
           // Create a new entry locally
           const newEntry = {
             id: Date.now(), // Use timestamp as ID
             content: content,
             type: 'text',
-            createdAt: selectedDate.toISOString()
+            createdAt: selectedDate.toISOString(),
+            moods: selectedMoods
           };
-          
+
           // Add to the local array
           const updatedEntries = [...entries, newEntry];
-          
+
           // Save to local storage
           localStorage.setItem('diaryEntries', JSON.stringify(updatedEntries));
           window.entriesData = updatedEntries;
-          
+
           // Update state
           setEntries(updatedEntries);
           setContent('');
+          setSelectedMoods([]);
         }
       }
     } catch (error) {
@@ -204,11 +243,13 @@ function App() {
   const startEditing = (entry) => {
     setEditingEntryId(entry.id);
     setEditContent(entry.content);
+    setEditMoods(entry.moods || []);
   };
 
   const cancelEditing = () => {
     setEditingEntryId(null);
     setEditContent('');
+    setEditMoods([]);
   };
 
   const saveEditedEntry = async () => {
@@ -222,13 +263,15 @@ function App() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            content: editContent
+            content: editContent,
+            moods: editMoods
           }),
         });
 
         if (response.ok) {
           setEditingEntryId(null);
           setEditContent('');
+          setEditMoods([]);
           fetchEntries();
         } else {
           throw new Error('API not available');
@@ -236,26 +279,28 @@ function App() {
       } catch (apiError) {
         // Handle locally if API is not available
         console.log('API not available, saving edit locally');
-        
+
         // Update the entry locally
-        const updatedEntries = entries.map(entry => 
-          entry.id === editingEntryId 
-            ? { 
-                ...entry, 
-                content: editContent,
-                updatedAt: new Date().toISOString()
-              } 
+        const updatedEntries = entries.map(entry =>
+          entry.id === editingEntryId
+            ? {
+              ...entry,
+              content: editContent,
+              moods: editMoods,
+              updatedAt: new Date().toISOString()
+            }
             : entry
         );
-        
+
         // Save to local storage
         localStorage.setItem('diaryEntries', JSON.stringify(updatedEntries));
         window.entriesData = updatedEntries;
-        
+
         // Update state
         setEntries(updatedEntries);
         setEditingEntryId(null);
         setEditContent('');
+        setEditMoods([]);
       }
     } catch (error) {
       console.error('Update entry failed:', error);
@@ -265,12 +310,12 @@ function App() {
   const insertFormatting = (type) => {
     const textarea = document.getElementById('edit-textarea');
     if (!textarea) return;
-    
+
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const selectedText = editContent.substring(start, end);
     let formattedText = '';
-    
+
     switch (type) {
       case 'bold':
         formattedText = `**${selectedText}**`;
@@ -287,19 +332,19 @@ function App() {
       default:
         formattedText = selectedText;
     }
-    
+
     const newContent = editContent.substring(0, start) + formattedText + editContent.substring(end);
     setEditContent(newContent);
-    
+
     setTimeout(() => {
       textarea.focus();
       textarea.setSelectionRange(start + formattedText.length, start + formattedText.length);
     }, 0);
   };
-  
+
   const renderMarkdown = (markdown) => {
     if (!markdown) return { __html: '' };
-    
+
     try {
       // For now, just return the raw HTML
       // You can add a markdown processor library later if needed
@@ -449,7 +494,7 @@ function App() {
       // Select the theme and show related entries
       setSelectedTheme(themeId);
       setThemeCurrentPage(1); // Reset to first page when changing themes
-      
+
       // All themes now come from API - fetch entries for this topic
       fetchTopicEntries(themeId);
     }
@@ -460,32 +505,32 @@ function App() {
     try {
       setIsLoadingTopics(true);
       const response = await fetch(`http://localhost:3001/api/topic-entries/${topicId}?concise=true`);
-      
+
       if (response.ok) {
         const data = await response.json();
         console.log('Topic entries fetched:', data);
-        
+
         if (data.status === 'success' && data.entries && data.entries.length > 0) {
           // Ensure each excerpt starts and ends with ellipsis if not already present
           const formattedEntries = data.entries.map(entry => {
             let excerpt = entry.excerpt;
-            
+
             // Make sure excerpt starts with ellipsis if it doesn't already
             if (!excerpt.startsWith('...')) {
               excerpt = '...' + excerpt;
             }
-            
+
             // Make sure excerpt ends with ellipsis if it doesn't already
             if (!excerpt.endsWith('...')) {
               excerpt = excerpt + '...';
             }
-            
+
             return {
               ...entry,
               excerpt: excerpt
             };
           });
-          
+
           setThemeRelatedEntries(formattedEntries);
         } else {
           setThemeRelatedEntries([]);
@@ -516,7 +561,7 @@ function App() {
       const dateB = new Date(b.date).getTime();
       return themeSortNewestFirst ? dateB - dateA : dateA - dateB;
     });
-    
+
     // Get current page entries
     const indexOfLastEntry = themeCurrentPage * themeEntriesPerPage;
     const indexOfFirstEntry = indexOfLastEntry - themeEntriesPerPage;
@@ -538,20 +583,20 @@ function App() {
         if (Array.isArray(importedEntries)) {
           // Merge with existing entries or replace them
           const updatedEntries = [...entries, ...importedEntries];
-          
+
           // Save to local storage
           localStorage.setItem('diaryEntries', JSON.stringify(updatedEntries));
           window.entriesData = updatedEntries;
-          
+
           // Update state
           setEntries(updatedEntries);
           console.log(`Imported ${importedEntries.length} entries successfully`);
-          
+
           // Reset file input
           if (fileInputRef.current) {
             fileInputRef.current.value = '';
           }
-          
+
           // Close dialog
           setShowImportDialog(false);
         } else {
@@ -579,7 +624,7 @@ function App() {
       const dateB = new Date(b.createdAt).getTime();
       return sortNewestFirst ? dateB - dateA : dateA - dateB;
     });
-    
+
     // Get current page entries
     const indexOfLastEntry = currentPage * entriesPerPage;
     const indexOfFirstEntry = indexOfLastEntry - entriesPerPage;
@@ -603,14 +648,14 @@ function App() {
           <div className="logo">
             <span className="logo-icon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M19 3H5C3.89 3 3 3.9 3 5V19C3 20.1 3.89 21 5 21H19C20.11 21 21 20.1 21 19V5C21 3.9 20.11 3 19 3ZM19 19H5V5H19V19ZM17 12H7V10H17V12ZM13 16H7V14H13V16ZM7 8H17V6H7V8Z" fill="#FF7A5C"/>
+                <path d="M19 3H5C3.89 3 3 3.9 3 5V19C3 20.1 3.89 21 5 21H19C20.11 21 21 20.1 21 19V5C21 3.9 20.11 3 19 3ZM19 19H5V5H19V19ZM17 12H7V10H17V12ZM13 16H7V14H13V16ZM7 8H17V6H7V8Z" fill="#FF7A5C" />
               </svg>
             </span>
             <span className="logo-text">Reflectly</span>
           </div>
           <nav className="app-nav">
-            <a 
-              href="#" 
+            <a
+              href="#"
               className={`nav-link ${activeTab === 'home' ? 'active' : ''}`}
               onClick={() => handleTabChange('home')}
             >首页</a>
@@ -628,15 +673,15 @@ function App() {
         </div>
 
       </header>
-      
+
       <div className="app-container">
         <main className="content-container">
           <div className="content-inner">
             <div className="page-header">
               <h1>{
-                  activeTab === 'home' ? '首页' :
+                activeTab === 'home' ? '首页' :
                   activeTab === 'diary' ? '主题' :
-                  '日历'}</h1>
+                    '日历'}</h1>
             </div>
 
             {/* Import dialog */}
@@ -649,7 +694,7 @@ function App() {
                   onChange={importEntriesFromFile}
                   ref={fileInputRef}
                 />
-                <button 
+                <button
                   className="close-button"
                   onClick={() => setShowImportDialog(false)}
                 >
@@ -678,7 +723,25 @@ function App() {
                     • List
                   </button>
                 </div>
-                
+
+                {/* Mood selector for editing */}
+                <div className="mood-selector">
+                  <div className="mood-selector-label">心情：</div>
+                  <div className="mood-buttons">
+                    {moodOptions.map(mood => (
+                      <button
+                        key={mood.value}
+                        type="button"
+                        className={`mood-button ${editMoods.includes(mood.value) ? 'selected' : ''}`}
+                        onClick={() => handleEditMoodToggle(mood.value)}
+                        title={mood.label}
+                      >
+                        <span className="mood-emoji">{mood.emoji}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="edit-container">
                   <div className="edit-pane">
                     <textarea
@@ -689,12 +752,12 @@ function App() {
                       className="diary-textarea"
                     />
                   </div>
-                  
+
                   <div className="preview-pane">
                     <div className="markdown-preview" dangerouslySetInnerHTML={renderMarkdown(editContent)} />
                   </div>
                 </div>
-                
+
                 <div className="button-group">
                   <button type="button" onClick={saveEditedEntry} className="save-button">
                     保存更改
@@ -712,28 +775,46 @@ function App() {
                 {/* Input form for new entries */}
                 <div className="input-card">
                   <form onSubmit={handleSubmit} className="diary-form">
+                    {/* Mood selector */}
+                    <div className="mood-selector">
+                      <div className="mood-selector-label">今天的心情：</div>
+                      <div className="mood-buttons">
+                        {moodOptions.map(mood => (
+                          <button
+                            key={mood.value}
+                            type="button"
+                            className={`mood-button ${selectedMoods.includes(mood.value) ? 'selected' : ''}`}
+                            onClick={() => handleMoodToggle(mood.value)}
+                            title={mood.label}
+                          >
+                            <span className="mood-emoji">{mood.emoji}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     <textarea
                       value={content}
                       onChange={(e) => setContent(e.target.value)}
                       placeholder="写下你的想法..."
                       className="diary-textarea"
                     />
-                    
+
                     <div className="input-toolbar">
                       <div className="toolbar-icons">
                         <button type="button" className="icon-button">
                           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2ZM18 20H6V4H13V9H18V20ZM8 16H16V18H8V16ZM8 12H16V14H8V12Z" fill="#666"/>
+                            <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2ZM18 20H6V4H13V9H18V20ZM8 16H16V18H8V16ZM8 12H16V14H8V12Z" fill="#666" />
                           </svg>
                         </button>
                         <button type="button" className="icon-button">
                           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M19 5V19H5V5H19ZM19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3ZM14.14 11.86L11.14 15.73L9 13.14L6 17H18L14.14 11.86Z" fill="#666"/>
+                            <path d="M19 5V19H5V5H19ZM19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3ZM14.14 11.86L11.14 15.73L9 13.14L6 17H18L14.14 11.86Z" fill="#666" />
                           </svg>
                         </button>
                         <button type="button" className="icon-button">
                           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" fill="#666"/>
+                            <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" fill="#666" />
                           </svg>
                         </button>
                       </div>
@@ -743,25 +824,38 @@ function App() {
                     </div>
                   </form>
                 </div>
-                
+
                 {/* Selected Date Entry Display */}
                 <div className="selected-date-entry">
                   <div className="selected-date-header">
                     <div className="selected-date">{formatDate(selectedDate)}</div>
                   </div>
-                  
+
                   {filteredEntries.length > 0 ? (
                     <>
                       <div className="entry-content-list">
                         {getCurrentEntries().map((entry) => (
                           <div key={entry.id} className="entry-content-item">
-                            <div 
+                            {/* Display moods if available */}
+                            {entry.moods && entry.moods.length > 0 && (
+                              <div className="mood-tags">
+                                {entry.moods.map(moodValue => {
+                                  const mood = moodOptions.find(m => m.value === moodValue);
+                                  return mood ? (
+                                    <span key={moodValue} className="mood-tag" title={mood.label}>
+                                      {mood.emoji}
+                                    </span>
+                                  ) : null;
+                                })}
+                              </div>
+                            )}
+                            <div
                               className="entry-content"
                               dangerouslySetInnerHTML={renderMarkdown(entry.content)}
                             />
                             <div className="entry-actions">
-                              <button 
-                                onClick={() => startEditing(entry)} 
+                              <button
+                                onClick={() => startEditing(entry)}
                                 className="edit-button"
                               >
                                 编辑
@@ -770,7 +864,7 @@ function App() {
                           </div>
                         ))}
                       </div>
-                      
+
                       {/* Pagination */}
                       {filteredEntries.length > entriesPerPage && (
                         <div className="pagination">
@@ -830,13 +924,13 @@ function App() {
                             >
                               <span className="theme-icon">
                                 {theme.category === 'people' ? '👤' :
-                                 theme.category === 'projects' ? '📁' :
-                                 theme.category === 'activities' ? '🎯' :
-                                 theme.category === 'places' ? '📍' :
-                                 theme.category === 'animals' ? '🐾' :
-                                 theme.category === 'objects' ? '🔧' :
-                                 theme.category === 'technologies' ? '💻' :
-                                 theme.category === 'concepts' ? '💡' : '📝'}
+                                  theme.category === 'projects' ? '📁' :
+                                    theme.category === 'activities' ? '🎯' :
+                                      theme.category === 'places' ? '📍' :
+                                        theme.category === 'animals' ? '🐾' :
+                                          theme.category === 'objects' ? '🔧' :
+                                            theme.category === 'technologies' ? '💻' :
+                                              theme.category === 'concepts' ? '💡' : '📝'}
                               </span>
                               <span className="theme-name">{theme.name}</span>
                               {theme.user_priority && theme.user_priority > 3 && (
@@ -857,8 +951,8 @@ function App() {
                         <div className="sort-toggle">
                           <span className={!themeSortNewestFirst ? 'active' : ''}>最早</span>
                           <label className="switch">
-                            <input 
-                              type="checkbox" 
+                            <input
+                              type="checkbox"
                               checked={themeSortNewestFirst}
                               onChange={toggleThemeSortOrder}
                             />
@@ -873,14 +967,14 @@ function App() {
                             <div className="theme-entry-header">
                               <span className="theme-entry-date">{entry.date}</span>
                             </div>
-                            <div 
+                            <div
                               className="theme-entry-excerpt"
                               dangerouslySetInnerHTML={{ __html: entry.excerpt }}
                             />
                           </div>
                         ))}
                       </div>
-                      
+
                       {/* Theme entries pagination */}
                       {themeRelatedEntries.length > themeEntriesPerPage && (
                         <div className="pagination theme-pagination">
@@ -895,9 +989,9 @@ function App() {
                           ))}
                         </div>
                       )}
-                      
+
                       <div className="view-all-container">
-                        <button 
+                        <button
                           className="view-all-button"
                           onClick={handleViewAllTopicEntries}
                         >

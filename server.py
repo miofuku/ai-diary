@@ -77,12 +77,14 @@ class EntryCreate(BaseModel):
     content: str
     type: str = "text"
     targetDate: Optional[str] = None
+    moods: Optional[List[str]] = None
 
 class EntryUpdate(BaseModel):
     content: Optional[str] = None
     appendMode: Optional[bool] = False
     existingContent: Optional[str] = None
     newContent: Optional[str] = None
+    moods: Optional[List[str]] = None
 
 class TopicExtractRequest(BaseModel):
     content: str
@@ -1760,7 +1762,8 @@ async def create_entry(entry: EntryCreate):
             "id": int(time.time() * 1000),  # Timestamp as ID
             "content": optimized_content,
             "type": entry.type,
-            "createdAt": created_at
+            "createdAt": created_at,
+            "moods": entry.moods or []
         }
         
         print(f"New entry object created: {new_entry}")
@@ -1908,6 +1911,10 @@ async def update_entry(id: int, entry_update: EntryUpdate):
     
     # Update the entry
     entries[entry_index]['content'] = final_content
+    
+    # Update moods if provided
+    if entry_update.moods is not None:
+        entries[entry_index]['moods'] = entry_update.moods
     
     # Write back to file
     with open(data_path, 'w') as f:
