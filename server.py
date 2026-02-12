@@ -4445,6 +4445,209 @@ async def get_topic_entries(topic_id: str, concise: bool = False):
         print(f"Error finding topic entries: {e}")
         return {"status": "error", "message": str(e)}
 
+# ALMANAC ANALYSIS FUNCTIONS
+
+class AlmanacDataEntry(BaseModel):
+    """Model for almanac data sent from frontend"""
+    date: str
+    recommends: List[str]
+    avoids: List[str]
+
+class AlmanacAnalysisRequest(BaseModel):
+    """Request model for almanac analysis"""
+    almanac_data: List[AlmanacDataEntry]
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    min_occurrences: int = 3
+
+def categorize_mood(mood):
+    """Categorize mood as good or bad"""
+    good_moods = ['happy', 'relaxed', 'confident']
+    bad_moods = ['tired', 'anxious', 'sad', 'angry']
+    
+    if mood in good_moods:
+        return 'good'
+    elif mood in bad_moods:
+        return 'bad'
+    else:
+        return 'neutral'
+
+def analyze_almanac_patterns_with_data(entries, almanac_data_list, start_date=None, end_date=None, min_occurrences=3):
+    """Analyze patterns between almanac elements and moods/activities using provided almanac data"""
+    try:
+        # Create a mapping of date to almanac data
+        almanac_map = {}
+        for almanac_entry in almanac_data_list:
+            date_key = almanac_entry['date'][:10]  # Use YYYY-MM-DD format
+            almanac_map[date_key] = {
+                'recommends': almanac_entry['recommends'],
+                'avoids': almanac_entry['avoids']
+            }
+        
+        # Filter entries by date range if specified
+        filtered_entries = entries
+        if start_date:
+            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            filtered_entries = [e for e in filtered_entries if datetime.fromisoformat(e['createdAt'].replace('Z', '+00:00')) >= start_dt]
+        if end_date:
+            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            filtered_entries = [e for e in filtered_entries if datetime.fromisoformat(e['createdAt'].replace('Z', '+00:00')) <= end_dt]
+        
+        # Data structures to store analysis
+        recommends_data = {}
+        avoids_data = {}
+        
+        # Process each entry
+        for entry in filtered_entries:
+            try:
+                entry_date = datetime.fromisoformat(entry['createdAt'].replace('Z', '+00:00'))
+                date_key = entry_date.strftime('%Y-%m-%d')
+                
+                # Get almanac data for this date
+                if date_key not in almanac_map:
+                    continue
+                
+                almanac = almanac_map[date_key]
+                moods = entry.get('moods', [])
+                
+                # Skip if no moods
+                if not moods:
+                    continue
+                
+                # Process recommends
+                for item in almanac['recommends']:
+                    if item not in recommends_data:
+                        recommends_data[item] = {
+                            'occurrences': 0,
+                            'moods': [],
+                            'topics': []
+                        }
+                    recommends_data[item]['occurrences'] += 1
+                    recommends_data[item]['moods'].extend(moods)
+                
+                # Process avoids
+                for item in almanac['avoids']:
+                    if item not in avoids_data:
+                        avoids_data[item] = {
+                            'occurrences': 0,
+                            'moods': [],
+                            'topics': []
+                        }
+                    avoids_data[item]['occurrences'] += 1
+                    avoids_data[item]['moods'].extend(moods)
+            
+            except Exception as e:
+                print(f"Error processing entry {entry.get('id')}: {e}")
+                continue
+        
+        # Calculate statistics for each almanac item
+        def calculate_stats(data_dict):
+            result = {}
+            for item, data in data_dict.items():
+                if data['occurrences'] < min_occurrences:
+                    continue
+                
+                moods = data['moods']
+                if not moods:
+                    continue
+                
+                # Count mood categories
+                good_count = sum(1 for m in moods if categorize_mood(m) == 'good')
+                bad_count = sum(1 for m in moods if categorize_mood(m) == 'bad')
+                total = len(moods)
+                
+                # Count individual moods
+                mood_counts = {}
+                for mood in moods:
+                    mood_counts[mood] = mood_counts.get(mood, 0) + 1
+                
+                # Calculate percentages
+                mood_details = {
+                    mood: round(count / total, 2)
+                    for mood, count in mood_counts.items()
+                }
+                
+                result[item] = {
+                    'occurrences': data['occurrences'],
+                    'mood_distribution': {
+                        'good': round(good_count / total, 2) if total > 0 else 0,
+                        'bad': round(bad_count / total, 2) if total > 0 else 0
+                    },
+                    'mood_details': mood_details,
+                    'activities': {}  # Placeholder for topic/activity data
+                }
+            
+            return result
+        
+        recommends_result = calculate_stats(recommends_data)
+        avoids_result = calculate_stats(avoids_data)
+        
+        # Calculate date range
+        if filtered_entries:
+            dates = [datetime.fromisoformat(e['createdAt'].replace('Z', '+00:00')) for e in filtered_entries]
+            date_range = f"{min(dates).strftime('%Y-%m-%d')} 至 {max(dates).strftime('%Y-%m-%d')}"
+        else:
+            date_range = "无数据"
+        
+        return {
+            'summary': {
+                'total_entries': len(filtered_entries),
+                'date_range': date_range,
+                'unique_recommends': len(recommends_result),
+                'unique_avoids': len(avoids_result)
+            },
+            'recommends': recommends_result,
+            'avoids': avoids_result
+        }
+    
+    except Exception as e:
+        print(f"Error in analyze_almanac_patterns: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'summary': {'total_entries': 0, 'date_range': '无数据', 'unique_recommends': 0, 'unique_avoids': 0},
+            'recommends': {},
+            'avoids': {}
+        }
+
+# ALMANAC ANALYSIS API ENDPOINT
+
+@app.post("/api/almanac-analysis")
+async def post_almanac_analysis(request: AlmanacAnalysisRequest):
+    """
+    Analyze correlations between almanac elements (recommends/avoids) and user moods/activities
+    Accepts almanac data from frontend since tyme4ts is a JavaScript library
+    """
+    try:
+        ensure_data_file()
+        
+        # Load entries
+        with open(data_path, 'r') as f:
+            entries = json.load(f)
+        
+        # Convert almanac data to dict format
+        almanac_data_list = [item.dict() for item in request.almanac_data]
+        
+        # Perform analysis
+        analysis_result = analyze_almanac_patterns_with_data(
+            entries,
+            almanac_data_list,
+            start_date=request.start_date,
+            end_date=request.end_date,
+            min_occurrences=request.min_occurrences
+        )
+        
+        return {
+            "status": "success",
+            "data": analysis_result
+        }
+    
+    except Exception as e:
+        print(f"Error in almanac analysis endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     # Start the topic detection scheduler
     task_scheduler.start_scheduler()

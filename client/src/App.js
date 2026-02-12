@@ -4,6 +4,7 @@ import DiaryCalendar from './components/DiaryCalendar';
 
 import TopicGraph from './components/TopicGraph';
 import TopicConfigManager from './components/TopicConfigManager';
+import AlmanacAnalysis from './components/AlmanacAnalysis';
 
 function App() {
   const [entries, setEntries] = useState([]);
@@ -669,6 +670,11 @@ function App() {
               className={`nav-link ${activeTab === 'calendar' ? 'active' : ''}`}
               onClick={() => handleTabChange('calendar')}
             >日历</a>
+            <a
+              href="#"
+              className={`nav-link ${activeTab === 'analysis' ? 'active' : ''}`}
+              onClick={() => handleTabChange('analysis')}
+            >分析</a>
           </nav>
         </div>
 
@@ -681,7 +687,8 @@ function App() {
               <h1>{
                 activeTab === 'home' ? '首页' :
                   activeTab === 'diary' ? '主题' :
-                    '日历'}</h1>
+                    activeTab === 'analysis' ? '分析' :
+                      '日历'}</h1>
             </div>
 
             {/* Import dialog */}
@@ -1007,6 +1014,11 @@ function App() {
             {/* Topic Graph tab content */}
             {activeTab === 'diary' && !editingEntryId && (
               <TopicGraph />
+            )}
+
+            {/* Analysis tab content */}
+            {activeTab === 'analysis' && !editingEntryId && (
+              <AlmanacAnalysis />
             )}
           </div>
         </main>
