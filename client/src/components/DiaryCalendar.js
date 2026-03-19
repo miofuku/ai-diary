@@ -407,9 +407,7 @@ function HardcodedYiJi({ selectedDate }) {
           </div>
         </div>
       </div>
-      <div className="almanac-more">
-                <a href="#" onClick={(e) => { e.preventDefault(); onTabChange && onTabChange('calendar'); }}>查看详情 →</a>
-      </div>
+
     </div>
   );
 }

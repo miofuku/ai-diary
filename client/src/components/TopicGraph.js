@@ -18,30 +18,29 @@ const TopicGraph = () => {
   const svgRef = useRef();
   const tooltipRef = useRef();
   
-  // GraphQL query
+  // GraphQL query - matches server TopicGraphType schema
   const TOPIC_GRAPH_QUERY = `
     query {
       topicGraph {
-        nodes {
-          __typename
-          ... on TopicNode {
-            id
-            name
-            type
-            topicType
-            importance
-            sentiment
-            context
-          }
-          ... on PersonNode {
-            id
-            name
-            type
-            role
-            importance
-          }
+        topics {
+          id
+          name
+          type
+          category
+          topicType
+          importance
+          sentiment
+          context
         }
-        edges {
+        people {
+          id
+          name
+          type
+          category
+          role
+          importance
+        }
+        relations {
           source
           target
           type
@@ -51,16 +50,22 @@ const TopicGraph = () => {
     }
   `;
 
+  const parseGraphData = (topicGraph) => {
+    const topics = (topicGraph.topics || []).map(t => ({ ...t, type: 'topic' }));
+    const people = (topicGraph.people || []).map(p => ({ ...p, type: 'person' }));
+    return {
+      nodes: [...topics, ...people],
+      edges: topicGraph.relations || []
+    };
+  };
+
   useEffect(() => {
     const fetchTopicGraph = async () => {
       try {
         setIsLoading(true);
         const data = await request('http://localhost:3001/graphql', TOPIC_GRAPH_QUERY);
         console.log('Graph data:', data);
-        setGraphData({
-          nodes: data.topicGraph.nodes || [],
-          edges: data.topicGraph.edges || []
-        });
+        setGraphData(parseGraphData(data.topicGraph));
       } catch (err) {
         console.error('Error fetching topic graph:', err);
         setError('Failed to load topic graph data');
@@ -94,10 +99,7 @@ const TopicGraph = () => {
       
       // Refresh the graph data after extraction
       const data = await request('http://localhost:3001/graphql', TOPIC_GRAPH_QUERY);
-      setGraphData({
-        nodes: data.topicGraph.nodes || [],
-        edges: data.topicGraph.edges || []
-      });
+      setGraphData(parseGraphData(data.topicGraph));
       
     } catch (err) {
       console.error('Error extracting topics:', err);
@@ -129,10 +131,7 @@ const TopicGraph = () => {
 
       // Refresh the graph data after deduplication
       const data = await request('http://localhost:3001/graphql', TOPIC_GRAPH_QUERY);
-      setGraphData({
-        nodes: data.topicGraph.nodes || [],
-        edges: data.topicGraph.edges || []
-      });
+      setGraphData(parseGraphData(data.topicGraph));
 
     } catch (err) {
       console.error('Error deduplicating topics:', err);
@@ -164,10 +163,7 @@ const TopicGraph = () => {
 
       // Refresh the graph data after rebuild
       const data = await request('http://localhost:3001/graphql', TOPIC_GRAPH_QUERY);
-      setGraphData({
-        nodes: data.topicGraph.nodes || [],
-        edges: data.topicGraph.edges || []
-      });
+      setGraphData(parseGraphData(data.topicGraph));
 
     } catch (err) {
       console.error('Error rebuilding topics:', err);
@@ -216,6 +212,16 @@ const TopicGraph = () => {
       .attr('height', height)
       .attr('viewBox', [0, 0, width, height]);
     
+    // Create a zoom-wrapper g for dragging/scaling
+    const gZoom = svg.append('g');
+
+    // Add zoom behavior to SVG
+    svg.call(d3.zoom()
+        .scaleExtent([0.2, 5])
+        .on('zoom', (event) => {
+            gZoom.attr('transform', event.transform);
+        }));
+
     // Create tooltip
     const tooltip = d3.select(tooltipRef.current)
       .style('opacity', 0)
@@ -228,8 +234,8 @@ const TopicGraph = () => {
       .force('center', d3.forceCenter(width / 2, height / 2))
       .force('collide', d3.forceCollide().radius(30));
     
-    // Create links
-    const link = svg.append('g')
+    // Create links in zoom group
+    const link = gZoom.append('g')
       .selectAll('line')
       .data(edges)
       .join('line')
@@ -237,8 +243,8 @@ const TopicGraph = () => {
       .attr('stroke-opacity', 0.6)
       .attr('stroke-width', d => Math.sqrt(d.strength || 1));
     
-    // Create nodes
-    const node = svg.append('g')
+    // Create nodes in zoom group
+    const node = gZoom.append('g')
       .selectAll('g')
       .data(nodes)
       .join('g')

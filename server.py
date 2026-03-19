@@ -1751,8 +1751,8 @@ async def create_entry(entry: EntryCreate):
     try:
         ensure_data_file()
         
-        # Re-enable optimization
-        optimized_content = optimize_text(entry.content)
+        # Save raw content directly without AI optimization
+        optimized_content = entry.content
         
         # Use provided date or current date
         created_at = entry.targetDate or datetime.now().isoformat()

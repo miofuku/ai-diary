@@ -667,11 +667,6 @@ function App() {
             >主题</a>
             <a
               href="#"
-              className={`nav-link ${activeTab === 'calendar' ? 'active' : ''}`}
-              onClick={() => handleTabChange('calendar')}
-            >日历</a>
-            <a
-              href="#"
               className={`nav-link ${activeTab === 'analysis' ? 'active' : ''}`}
               onClick={() => handleTabChange('analysis')}
             >分析</a>
@@ -687,8 +682,7 @@ function App() {
               <h1>{
                 activeTab === 'home' ? '首页' :
                   activeTab === 'diary' ? '主题' :
-                    activeTab === 'analysis' ? '分析' :
-                      '日历'}</h1>
+                    '分析'}</h1>
             </div>
 
             {/* Import dialog */}
