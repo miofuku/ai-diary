@@ -15,6 +15,7 @@ venv/
 .vscode/
 *.swp
 *.swo
+.codex
 
 # Logs
 logs/

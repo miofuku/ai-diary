@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import '../styles/TopicDiaries.css';
+import { sanitizeHighlightHtml } from '../utils/html';
 
 const TopicDiaries = ({ topics, onTopicSelect, selectedTopicId, onBack }) => {
   const [topicEntries, setTopicEntries] = useState([]);
@@ -24,60 +25,17 @@ const TopicDiaries = ({ topics, onTopicSelect, selectedTopicId, onBack }) => {
         const data = await response.json();
         
         if (data.status === 'success' && data.entries && data.entries.length > 0) {
-          // Process entries to ensure proper formatting with highlights
           const formattedEntries = data.entries.map(entry => {
             let excerpt = entry.excerpt || '';
-            const topicName = topics.find(t => t.id === topicId)?.name;
             
             // Ensure excerpt starts with ellipsis if not already
             if (!excerpt.startsWith('...')) {
               excerpt = '...' + excerpt;
             }
-            
-            // Find the topic name position in the excerpt
-            if (topicName && excerpt.includes(topicName)) {
-              // Find the position of the topic name
-              const topicPos = excerpt.indexOf(topicName);
-              
-              // Get the part of the sentence containing the topic
-              let sentenceStart = excerpt.lastIndexOf('。', topicPos);
-              sentenceStart = sentenceStart === -1 ? 0 : sentenceStart + 1;
-              
-              // Find the first period after the topic name
-              const periodPos = excerpt.indexOf('。', topicPos);
-              const englishPeriodPos = excerpt.indexOf('.', topicPos);
-              const commaPos = excerpt.indexOf('，', topicPos);
-              
-              // Determine which punctuation comes first (if any)
-              let cutoffPos = -1;
-              if (periodPos !== -1) {
-                cutoffPos = periodPos;
-              }
-              if (englishPeriodPos !== -1 && (cutoffPos === -1 || englishPeriodPos < cutoffPos)) {
-                cutoffPos = englishPeriodPos;
-              }
-              if (commaPos !== -1 && (cutoffPos === -1 || commaPos < cutoffPos)) {
-                cutoffPos = commaPos;
-              }
-              
-              // Truncate the excerpt if a punctuation was found
-              if (cutoffPos !== -1) {
-                excerpt = excerpt.substring(sentenceStart, cutoffPos + 1); // Include the punctuation
-                if (!excerpt.endsWith('...')) {
-                  excerpt = excerpt + '...';
-                }
-              }
-              
-              // Add highlighting to the topic name
-              excerpt = excerpt.replace(
-                new RegExp(topicName, 'g'), 
-                `<span class="highlight">${topicName}</span>`
-              );
-            }
-            
+
             return {
               ...entry,
-              excerpt: excerpt
+              excerpt: sanitizeHighlightHtml(excerpt)
             };
           });
           

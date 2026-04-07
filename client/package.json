@@ -19,6 +19,13 @@
     "web-vitals": "^2.1.4",
     "glob": ">=10.5.0"
   },
+  "overrides": {
+    "lodash": "^4.17.24",
+    "serialize-javascript": "^7.0.5",
+    "postcss-svgo": {
+      "svgo": "^2.8.1"
+    }
+  },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",

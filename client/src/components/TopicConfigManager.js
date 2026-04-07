@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import '../styles/TopicConfigManager.css';
 
 const TopicConfigManager = ({ onTopicsUpdated }) => {
@@ -25,11 +25,39 @@ const TopicConfigManager = ({ onTopicsUpdated }) => {
   const [analytics, setAnalytics] = useState(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
-  useEffect(() => {
-    loadTopicData();
+  const loadTopicStats = useCallback(async () => {
+    try {
+      // Get topic usage statistics
+      const response = await fetch('http://localhost:3001/api/topic-stats');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'success') {
+          setTopicStats(data.stats);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading topic stats:', err);
+    }
   }, []);
 
-  const loadTopicData = async () => {
+  const loadAnalytics = useCallback(async () => {
+    try {
+      setLoadingAnalytics(true);
+      const response = await fetch('http://localhost:3001/api/topic-analytics');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'success') {
+          setAnalytics(data.analytics);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading analytics:', err);
+    } finally {
+      setLoadingAnalytics(false);
+    }
+  }, []);
+
+  const loadTopicData = useCallback(async () => {
     try {
       setIsLoading(true);
       
@@ -87,39 +115,11 @@ const TopicConfigManager = ({ onTopicsUpdated }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [activeTab, loadAnalytics, loadTopicStats]);
 
-  const loadTopicStats = async () => {
-    try {
-      // Get topic usage statistics
-      const response = await fetch('http://localhost:3001/api/topic-stats');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
-          setTopicStats(data.stats);
-        }
-      }
-    } catch (err) {
-      console.error('Error loading topic stats:', err);
-    }
-  };
-
-  const loadAnalytics = async () => {
-    try {
-      setLoadingAnalytics(true);
-      const response = await fetch('http://localhost:3001/api/topic-analytics');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
-          setAnalytics(data.analytics);
-        }
-      }
-    } catch (err) {
-      console.error('Error loading analytics:', err);
-    } finally {
-      setLoadingAnalytics(false);
-    }
-  };
+  useEffect(() => {
+    loadTopicData();
+  }, [loadTopicData]);
 
   const updateTopicVisibility = async (topicId, visible) => {
     try {
@@ -217,27 +217,6 @@ const TopicConfigManager = ({ onTopicsUpdated }) => {
     } catch (err) {
       console.error('Error creating custom topic:', err);
       setError('Failed to create custom topic');
-    }
-  };
-
-  const deleteCustomTopic = async (topicId) => {
-    try {
-      const response = await fetch(`http://localhost:3001/api/topics/custom/${topicId}`, {
-        method: 'DELETE'
-      });
-
-      const data = await response.json();
-      if (data.status === 'success') {
-        loadTopicData();
-        if (onTopicsUpdated) {
-          onTopicsUpdated();
-        }
-      } else {
-        setError('Failed to delete custom topic');
-      }
-    } catch (err) {
-      console.error('Error deleting custom topic:', err);
-      setError('Failed to delete custom topic');
     }
   };
 

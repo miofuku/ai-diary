@@ -1,9 +1,78 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { request } from 'graphql-request';
 import '../styles/TopicGraph.css';
 
 // D3 imports for visualization
 import * as d3 from 'd3';
+
+const TOPIC_GRAPH_QUERY = `
+  query {
+    topicGraph {
+      topics {
+        id
+        name
+        type
+        category
+        topicType
+        importance
+        sentiment
+        context
+      }
+      people {
+        id
+        name
+        type
+        category
+        role
+        importance
+      }
+      relations {
+        source
+        target
+        type
+        strength
+      }
+    }
+  }
+`;
+
+const parseGraphData = (topicGraph) => {
+  const topics = (topicGraph.topics || []).map(t => ({ ...t, type: 'topic' }));
+  const people = (topicGraph.people || []).map(p => ({ ...p, type: 'person' }));
+  return {
+    nodes: [...topics, ...people],
+    edges: topicGraph.relations || []
+  };
+};
+
+const getNodeRadius = (node) => {
+  const baseSize = 10;
+  const importanceFactor = node.importance ? node.importance : 3;
+  return baseSize + (importanceFactor - 1) * 2;
+};
+
+const getNodeColor = (node) => {
+  if (node.type === 'person') {
+    return '#4299e1';
+  }
+
+  if (node.type === 'topic') {
+    if (node.sentiment > 0.5) return '#48bb78';
+    if (node.sentiment < -0.5) return '#f56565';
+    return '#ed8936';
+  }
+
+  return '#a0aec0';
+};
+
+const getSentimentText = (sentiment) => {
+  if (!sentiment && sentiment !== 0) return '中性';
+  if (sentiment > 1) return '非常积极';
+  if (sentiment > 0.3) return '积极';
+  if (sentiment < -1) return '非常消极';
+  if (sentiment < -0.3) return '消极';
+  return '中性';
+};
 
 const TopicGraph = () => {
   const [graphData, setGraphData] = useState({ nodes: [], edges: [] });
@@ -18,64 +87,23 @@ const TopicGraph = () => {
   const svgRef = useRef();
   const tooltipRef = useRef();
   
-  // GraphQL query - matches server TopicGraphType schema
-  const TOPIC_GRAPH_QUERY = `
-    query {
-      topicGraph {
-        topics {
-          id
-          name
-          type
-          category
-          topicType
-          importance
-          sentiment
-          context
-        }
-        people {
-          id
-          name
-          type
-          category
-          role
-          importance
-        }
-        relations {
-          source
-          target
-          type
-          strength
-        }
-      }
+  const fetchTopicGraph = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const data = await request('http://localhost:3001/graphql', TOPIC_GRAPH_QUERY);
+      console.log('Graph data:', data);
+      setGraphData(parseGraphData(data.topicGraph));
+    } catch (err) {
+      console.error('Error fetching topic graph:', err);
+      setError('Failed to load topic graph data');
+    } finally {
+      setIsLoading(false);
     }
-  `;
-
-  const parseGraphData = (topicGraph) => {
-    const topics = (topicGraph.topics || []).map(t => ({ ...t, type: 'topic' }));
-    const people = (topicGraph.people || []).map(p => ({ ...p, type: 'person' }));
-    return {
-      nodes: [...topics, ...people],
-      edges: topicGraph.relations || []
-    };
-  };
+  }, []);
 
   useEffect(() => {
-    const fetchTopicGraph = async () => {
-      try {
-        setIsLoading(true);
-        const data = await request('http://localhost:3001/graphql', TOPIC_GRAPH_QUERY);
-        console.log('Graph data:', data);
-        setGraphData(parseGraphData(data.topicGraph));
-      } catch (err) {
-        console.error('Error fetching topic graph:', err);
-        setError('Failed to load topic graph data');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchTopicGraph();
-  }, []);
+  }, [fetchTopicGraph]);
 
   // Function to extract topics from diary entries
   const extractTopics = async () => {
@@ -98,8 +126,7 @@ const TopicGraph = () => {
       console.log('Topics extraction result:', result);
       
       // Refresh the graph data after extraction
-      const data = await request('http://localhost:3001/graphql', TOPIC_GRAPH_QUERY);
-      setGraphData(parseGraphData(data.topicGraph));
+      await fetchTopicGraph();
       
     } catch (err) {
       console.error('Error extracting topics:', err);
@@ -130,8 +157,7 @@ const TopicGraph = () => {
       console.log('Topic deduplication result:', result);
 
       // Refresh the graph data after deduplication
-      const data = await request('http://localhost:3001/graphql', TOPIC_GRAPH_QUERY);
-      setGraphData(parseGraphData(data.topicGraph));
+      await fetchTopicGraph();
 
     } catch (err) {
       console.error('Error deduplicating topics:', err);
@@ -162,8 +188,7 @@ const TopicGraph = () => {
       console.log('Topic rebuild result:', result);
 
       // Refresh the graph data after rebuild
-      const data = await request('http://localhost:3001/graphql', TOPIC_GRAPH_QUERY);
-      setGraphData(parseGraphData(data.topicGraph));
+      await fetchTopicGraph();
 
     } catch (err) {
       console.error('Error rebuilding topics:', err);
@@ -173,31 +198,7 @@ const TopicGraph = () => {
     }
   };
 
-  useEffect(() => {
-    if (isLoading || !graphData.nodes.length) return;
-    
-    // Filter nodes based on type filter
-    const filteredNodes = filterType === 'all' 
-      ? graphData.nodes 
-      : graphData.nodes.filter(node => {
-          if (filterType === 'person') return node.type === 'person';
-          if (filterType === 'topic') return node.type === 'topic';
-          if (node.type === 'topic' && node.topicType) {
-            return node.topicType === filterType;
-          }
-          return false;
-        });
-    
-    // Filter edges to only include connections between filtered nodes
-    const filteredNodeIds = new Set(filteredNodes.map(node => node.id));
-    const filteredEdges = graphData.edges.filter(edge => 
-      filteredNodeIds.has(edge.source) && filteredNodeIds.has(edge.target)
-    );
-    
-    renderGraph(filteredNodes, filteredEdges);
-  }, [graphData, filterType, isLoading]);
-
-  const renderGraph = (nodes, edges) => {
+  const renderGraph = useCallback((nodes, edges) => {
     // Clear previous graph
     d3.select(svgRef.current).selectAll('*').remove();
     
@@ -342,38 +343,29 @@ const TopicGraph = () => {
         .on('drag', dragged)
         .on('end', dragended);
     }
-  };
-  
-  // Helper functions
-  const getNodeRadius = (node) => {
-    const baseSize = 10;
-    const importanceFactor = node.importance ? node.importance : 3;
-    return baseSize + (importanceFactor - 1) * 2;
-  };
-  
-  const getNodeColor = (node) => {
-    if (node.type === 'person') {
-      return '#4299e1'; // Blue for people
-    }
+  }, []);
+
+  useEffect(() => {
+    if (isLoading || !graphData.nodes.length) return;
     
-    // Topics colored by sentiment
-    if (node.type === 'topic') {
-      if (node.sentiment > 0.5) return '#48bb78'; // Green for positive
-      if (node.sentiment < -0.5) return '#f56565'; // Red for negative
-      return '#ed8936'; // Orange for neutral
-    }
+    const filteredNodes = filterType === 'all' 
+      ? graphData.nodes 
+      : graphData.nodes.filter(node => {
+          if (filterType === 'person') return node.type === 'person';
+          if (filterType === 'topic') return node.type === 'topic';
+          if (node.type === 'topic' && node.topicType) {
+            return node.topicType === filterType;
+          }
+          return false;
+        });
     
-    return '#a0aec0'; // Default gray
-  };
-  
-  const getSentimentText = (sentiment) => {
-    if (!sentiment && sentiment !== 0) return '中性';
-    if (sentiment > 1) return '非常积极';
-    if (sentiment > 0.3) return '积极';
-    if (sentiment < -1) return '非常消极';
-    if (sentiment < -0.3) return '消极';
-    return '中性';
-  };
+    const filteredNodeIds = new Set(filteredNodes.map(node => node.id));
+    const filteredEdges = graphData.edges.filter(edge => 
+      filteredNodeIds.has(edge.source) && filteredNodeIds.has(edge.target)
+    );
+    
+    renderGraph(filteredNodes, filteredEdges);
+  }, [graphData, filterType, isLoading, renderGraph]);
   
   const handleFilterChange = (e) => {
     setFilterType(e.target.value);

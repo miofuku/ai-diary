@@ -5,6 +5,7 @@ import DiaryCalendar from './components/DiaryCalendar';
 import TopicGraph from './components/TopicGraph';
 import TopicConfigManager from './components/TopicConfigManager';
 import AlmanacAnalysis from './components/AlmanacAnalysis';
+import { renderSafeMarkdown, sanitizeHighlightHtml } from './utils/html';
 
 function App() {
   const [entries, setEntries] = useState([]);
@@ -26,7 +27,7 @@ function App() {
   // Add state for pagination and sort order
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage] = useState(5);
-  const [sortNewestFirst, setSortNewestFirst] = useState(false);
+  const [sortNewestFirst] = useState(false);
   // Add state for theme entries pagination and sorting
   const [themeCurrentPage, setThemeCurrentPage] = useState(1);
   const [themeEntriesPerPage] = useState(3);
@@ -343,19 +344,6 @@ function App() {
     }, 0);
   };
 
-  const renderMarkdown = (markdown) => {
-    if (!markdown) return { __html: '' };
-
-    try {
-      // For now, just return the raw HTML
-      // You can add a markdown processor library later if needed
-      return { __html: markdown.replace(/\n/g, '<br/>') };
-    } catch (error) {
-      console.error('Error rendering content:', error);
-      return { __html: markdown };
-    }
-  };
-
   // 格式化日期为中文格式
   const formatDate = (date) => {
     if (!date) return '';
@@ -655,21 +643,21 @@ function App() {
             <span className="logo-text">Reflectly</span>
           </div>
           <nav className="app-nav">
-            <a
-              href="#"
+            <button
+              type="button"
               className={`nav-link ${activeTab === 'home' ? 'active' : ''}`}
               onClick={() => handleTabChange('home')}
-            >首页</a>
-            <a
-              href="#"
+            >首页</button>
+            <button
+              type="button"
               className={`nav-link ${activeTab === 'diary' ? 'active' : ''}`}
               onClick={() => handleTabChange('diary')}
-            >主题</a>
-            <a
-              href="#"
+            >主题</button>
+            <button
+              type="button"
               className={`nav-link ${activeTab === 'analysis' ? 'active' : ''}`}
               onClick={() => handleTabChange('analysis')}
-            >分析</a>
+            >分析</button>
           </nav>
         </div>
 
@@ -755,7 +743,7 @@ function App() {
                   </div>
 
                   <div className="preview-pane">
-                    <div className="markdown-preview" dangerouslySetInnerHTML={renderMarkdown(editContent)} />
+                    <div className="markdown-preview" dangerouslySetInnerHTML={renderSafeMarkdown(editContent)} />
                   </div>
                 </div>
 
@@ -852,7 +840,7 @@ function App() {
                             )}
                             <div
                               className="entry-content"
-                              dangerouslySetInnerHTML={renderMarkdown(entry.content)}
+                              dangerouslySetInnerHTML={renderSafeMarkdown(entry.content)}
                             />
                             <div className="entry-actions">
                               <button
@@ -970,7 +958,7 @@ function App() {
                             </div>
                             <div
                               className="theme-entry-excerpt"
-                              dangerouslySetInnerHTML={{ __html: entry.excerpt }}
+                              dangerouslySetInnerHTML={{ __html: sanitizeHighlightHtml(entry.excerpt) }}
                             />
                           </div>
                         ))}

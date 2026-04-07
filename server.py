@@ -8,6 +8,7 @@ import tempfile
 import os
 import json
 import time
+import html
 from datetime import datetime, timedelta
 from pathlib import Path
 from openai import OpenAI
@@ -35,11 +36,27 @@ USE_AI_FOR_TOPICS = os.getenv("USE_AI_FOR_TOPICS", "true").lower() == "true"
 # Configure FastAPI app
 app = FastAPI()
 
+# Configure CORS origins
+def get_cors_settings():
+    raw_origins = os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
+    )
+    origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+    allow_all = "*" in origins
+
+    if not origins:
+        origins = ["http://localhost:3000"]
+
+    return origins, allow_all
+
+cors_origins, cors_allow_all = get_cors_settings()
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict this to your frontend URL
-    allow_credentials=True,
+    allow_origins=["*"] if cors_allow_all else cors_origins,
+    allow_credentials=not cors_allow_all,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -3070,6 +3087,28 @@ def load_entries():
         print(f"Error loading entries: {str(e)}")
         return []
 
+def highlight_topic_excerpt(text: str, topic_name: str) -> str:
+    """Escape user content while preserving our highlight markup."""
+    if not text:
+        return ""
+
+    if not topic_name:
+        return html.escape(text)
+
+    pattern = re.compile(re.escape(topic_name), re.IGNORECASE)
+    highlighted_parts = []
+    last_end = 0
+
+    for match in pattern.finditer(text):
+        highlighted_parts.append(html.escape(text[last_end:match.start()]))
+        highlighted_parts.append(
+            f"<span class='highlight'>{html.escape(match.group(0))}</span>"
+        )
+        last_end = match.end()
+
+    highlighted_parts.append(html.escape(text[last_end:]))
+    return "".join(highlighted_parts)
+
 async def extract_topics_from_entries(entries):
     """
     Extract topics from ALL diary entries using the improved granular system
@@ -4300,11 +4339,13 @@ async def get_topic_entries(topic_id: str, concise: bool = False):
                 if os.path.exists(topics_path) and os.path.getsize(topics_path) > 0:
                     with open(topics_path, "r") as f:
                         topics_data = json.load(f)
-                        
-                    # Find the topic
-                    for topic in topics_data:
-                        if topic.get("id") == topic_id:
-                            topic_data = topic
+
+                    for collection_name in ("topics", "people"):
+                        for topic in topics_data.get(collection_name, []):
+                            if topic.get("id") == topic_id:
+                                topic_data = topic
+                                break
+                        if topic_data:
                             break
             except Exception as e:
                 print(f"Error loading topics data: {e}")
@@ -4332,9 +4373,11 @@ async def get_topic_entries(topic_id: str, concise: bool = False):
             try:
                 date_obj = datetime.fromisoformat(entry_date.replace('Z', '+00:00'))
                 formatted_date = f"{date_obj.year}年{date_obj.month}月{date_obj.day}日"
+                sort_timestamp = date_obj.timestamp()
             except Exception:
                 # Fallback to raw date
                 formatted_date = entry_date
+                sort_timestamp = 0
             
             # Check if topic is mentioned in the entry
             if topic_name.lower() in entry_content.lower():
@@ -4392,18 +4435,11 @@ async def get_topic_entries(topic_id: str, concise: bool = False):
                         
                         # Extract the context
                         excerpt = entry_content[excerpt_start:excerpt_end].strip()
-                        
-                        # Highlight the topic name
-                        highlighted_excerpt = re.sub(
-                            f"({re.escape(topic_name)})",
-                            r"<span class='highlight'>\1</span>",
-                            excerpt,
-                            flags=re.IGNORECASE
-                        )
+                        highlighted_excerpt = highlight_topic_excerpt(excerpt, topic_name)
                     else:
                         # Fallback - should rarely happen
                         excerpt = entry_content[:100] + "..." if len(entry_content) > 100 else entry_content
-                        highlighted_excerpt = excerpt
+                        highlighted_excerpt = highlight_topic_excerpt(excerpt, topic_name)
                 else:
                     # Use a larger excerpt for full display
                     if len(entry_content) > 500:
@@ -4417,24 +4453,22 @@ async def get_topic_entries(topic_id: str, concise: bool = False):
                             excerpt = entry_content[:500] + "..."
                     else:
                         excerpt = entry_content
-                    
-                    # Highlight the topic name
-                    highlighted_excerpt = re.sub(
-                        f"({re.escape(topic_name)})",
-                        r"<span class='highlight'>\1</span>",
-                        excerpt,
-                        flags=re.IGNORECASE
-                    )
+
+                    highlighted_excerpt = highlight_topic_excerpt(excerpt, topic_name)
                 
                 related_entries.append({
                     'id': entry.get('id'),
                     'date': formatted_date,
                     'title': f"{topic_name} - {formatted_date}",
-                    'excerpt': highlighted_excerpt
+                    'excerpt': highlighted_excerpt,
+                    'sortTimestamp': sort_timestamp
                 })
         
         # Sort entries by date (newest first)
-        related_entries.sort(key=lambda x: x['date'], reverse=True)
+        related_entries.sort(key=lambda x: x['sortTimestamp'], reverse=True)
+
+        for related_entry in related_entries:
+            related_entry.pop('sortTimestamp', None)
         
         return {
             "status": "success",
