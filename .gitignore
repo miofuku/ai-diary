@@ -70,3 +70,6 @@ data/
 # 依赖
 /client/node_modules
 /server/node_modules
+
+.claude/
+.agents/

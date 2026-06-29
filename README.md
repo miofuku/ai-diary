@@ -79,12 +79,13 @@ npm start
 ## Technology Stack
 
 ### Backend
-- Python (Flask) for API endpoints
-- tyme4ts for Chinese calendar calculations
+- Python with FastAPI + Uvicorn for REST and GraphQL (Strawberry) endpoints
+- Entries and topic data stored as local JSON files under `data/`
 
 ### Frontend
-- React for UI components
+- React (built with Vite)
 - react-calendar for calendar visualization
+- tyme4ts for Chinese calendar calculations
 
 ## Contributing
 
